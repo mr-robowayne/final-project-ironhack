@@ -1,0 +1,36 @@
+# ---------------------------------------------------------------
+# WHITELIST-MODUS: Ignoriere ALLES, ausser Infrastruktur/Pipeline
+# ---------------------------------------------------------------
+*
+
+# ! bedeutet: "Nicht ignorieren" (Erlauben)
+!*/
+!/.gitignore
+!/.github/
+!/.github/**
+!/terraform/
+!/terraform/**
+!/scripts/
+!/scripts/**
+
+# ---------------------------------------------------------------
+# SECURITY & CLEANUP (Gilt auch innerhalb der erlaubten Ordner)
+# ---------------------------------------------------------------
+
+# OS & IDE
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Terraform Security
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+*.tfvars.json
+*.tfplan
+crash.log
+.env
+.env.local
+node_modules/

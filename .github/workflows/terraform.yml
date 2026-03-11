@@ -1,0 +1,189 @@
+# Pipeline name — displayed in GitHub Actions UI
+name: Terraform
+
+# Triggers — when should the pipeline run?
+on:
+  push:
+    branches:
+      - main        # to main branch
+      - development # to development branch
+    paths:
+      - 'terraform/**'  # only trigger when terraform files change
+      - '.github/action-loggs/**'  # only trigger when terraform files change -> for pipeline-testing
+  pull_request:
+    branches:
+      - main        # targeting main
+      - development # targeting development
+    paths:
+      - 'terraform/**'  # only trigger when terraform files change
+      - '.github/action-loggs/**'  # only trigger when terraform files change -> for pipeline-testing
+
+permissions:
+  id-token: write # This is required for requesting the JWT for AWS OIDC
+  contents: read  # This is required for actions/checkout
+
+jobs:
+  # -------------------------------------------------------
+  # JOB 1: Development — Plan only, no Apply
+  # -------------------------------------------------------
+  terraform-dev:
+    name: Terraform Development
+    runs-on: ubuntu-latest # runs on a GitHub-hosted Ubuntu server
+    environment: development # uses secrets from GitHub Environment "development"
+
+    # This job runs ONLY when:
+    # - a direct push to development happens
+    # - or a PR targeting development is opened
+    if: github.ref == 'refs/heads/development' || (github.event_name == 'pull_request' && github.base_ref == 'development')
+
+    steps:
+      # Download the repository code
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Login to AWS using the OIDC Role we created
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      # Install Terraform CLI
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.7.0
+
+      # INJECTION: Erstelle die variables.tfvars aus dem GitHub Secret
+      - name: Create variables.tfvars from Secret
+        run: echo "${{ secrets.TF_VARS_DEPLOY_AWS_RESSOURCES }}" > variables.tfvars
+        working-directory: terraform/deploy-aws-ressources
+     
+     # Install TFLint
+      - name: Setup TFLint
+        uses: terraform-linters/setup-tflint@v4
+
+      # Initialize Terraform — connect backend, download modules and providers
+      # WICHTIG: working-directory anpassen auf den Ordner, den du deployen willst (z.B. deploy-backend oder deploy-aws-ressources)
+      - name: Terraform Init
+        run: |
+          terraform init \
+            -backend-config="bucket=patientsync-prod-tfstate" \
+            -backend-config="key=deploy-aws-ressources/terraform.tfstate" \
+            -backend-config="region=eu-central-2" \
+            -backend-config="dynamodb_table=patientsync-prod-tf-locks"
+        working-directory: terraform/deploy-aws-ressources
+
+      # Format code correctly 
+      - name: Terraform Format
+        run: terraform fmt -recursive
+        working-directory: terraform/deploy-aws-ressources
+
+      # Check if code is correctly formatted — fails if not
+      - name: Terraform Check Format
+        run: terraform fmt -check -recursive
+        working-directory: terraform/deploy-aws-ressources
+
+      # Run TFLint
+      - name: Run TFLint
+        run: tflint
+        working-directory: terraform/deploy-aws-ressources
+
+      # Run tfsec
+      - name: Run tfsec
+        uses: aquasecurity/tfsec-action@v1.0.3
+        with:
+          working_directory: terraform/deploy-aws-ressources
+      
+      # Validate syntax and configuration
+      - name: Terraform Validate
+        run: terraform validate
+        working-directory: terraform/deploy-aws-ressources
+
+      # Run plan — shows what would change, but does nothing
+      - name: Terraform Plan
+        run: terraform plan -var-file=variables.tfvars
+        working-directory: terraform/deploy-aws-ressources
+
+  # -------------------------------------------------------
+  # JOB 2: Production — Plan + Apply
+  # -------------------------------------------------------
+  terraform-prod:
+    name: Terraform Production
+    runs-on: ubuntu-latest
+    environment: production # uses secrets from GitHub Environment "production"
+
+    # This job runs ONLY when:
+    # - a direct push to main happens
+    # - or a PR targeting main is opened
+    if: github.ref == 'refs/heads/main' || (github.event_name == 'pull_request' && github.base_ref == 'main')
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Login to AWS using the OIDC Role we created
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.7.0
+
+      # INJECTION: Erstelle die variables.tfvars aus dem GitHub Secret
+      - name: Create variables.tfvars from Secret
+        run: echo "${{ secrets.TF_VARS_DEPLOY_AWS_RESSOURCES }}" > variables.tfvars
+        working-directory: terraform/deploy-aws-ressources
+
+      # Initialize Terraform — connect backend, download modules and providers
+      - name: Terraform Init
+        run: |
+          terraform init \
+            -backend-config="bucket=patientsync-prod-tfstate" \
+            -backend-config="key=deploy-aws-ressources/terraform.tfstate" \
+            -backend-config="region=eu-central-2" \
+            -backend-config="dynamodb_table=patientsync-prod-tf-locks"
+        working-directory: terraform/deploy-aws-ressources
+      
+      # Format code correctly 
+      - name: Terraform Format
+        run: terraform fmt -recursive
+        working-directory: terraform/deploy-aws-ressources
+        
+      # Check if code is correctly formatted — fails if not
+      - name: Terraform Check Format
+        run: terraform fmt -check -recursive
+        working-directory: terraform/deploy-aws-ressources
+
+      # Run TFLint
+      - name: Run TFLint
+        run: tflint
+        working-directory: terraform/deploy-aws-ressources
+
+      # Run tfsec
+      - name: Run tfsec
+        uses: aquasecurity/tfsec-action@v1.0.3
+        with:
+          working_directory: terraform/deploy-aws-ressources
+          
+      # Validate syntax and configuration
+      - name: Terraform Validate
+        run: terraform validate
+        working-directory: terraform/deploy-aws-ressources
+
+      # Plan with -out=tfplan — saves the plan as a file
+      # ensures Apply runs the exact same plan
+      - name: Terraform Plan
+        run: terraform plan -var-file=variables.tfvars -out=tfplan
+        working-directory: terraform/deploy-aws-ressources
+
+      # Apply ONLY on direct push (not on PR)
+      # meaning only when actually merged into main
+      - name: Terraform Apply
+        if: github.event_name == 'push'
+        run: terraform apply -auto-approve tfplan
+        working-directory: terraform/deploy-aws-ressources
