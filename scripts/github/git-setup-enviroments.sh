@@ -51,33 +51,14 @@ gh api "repos/${REPO}/environments/production/deployment-branch-policies" \
   --method POST \
   --field name="${PROD_BRANCH}" 2>/dev/null || true
 
-# ── Branch Protection auf main (kostenloser Ersatz für Required Reviewers) ───
-echo "  [main] Branch Protection — PR required before merge..."
-gh api "repos/${REPO}/branches/${PROD_BRANCH}/protection" \
-  --method PUT \
-  --input - << EOF
-{
-  "required_status_checks": {
-    "strict": true,
-    "contexts": ["Code-Qualität (Trivy)", "Build & Push (Production)"]
-  },
-  "enforce_admins": false,
-  "required_pull_request_reviews": {
-    "required_approving_review_count": 1,
-    "dismiss_stale_reviews": true
-  },
-  "restrictions": null
-}
-EOF
-
 echo ""
 echo "══════════════════════════════════════════════════════════════"
 echo "✓ Environments konfiguriert:"
-echo "  development → branch: ${DEV_BRANCH}"
-echo "  production  → branch: ${PROD_BRANCH}"
+echo "  development → nur branch: ${DEV_BRANCH}"
+echo "  production  → nur branch: ${PROD_BRANCH}"
 echo ""
-echo "✓ Branch Protection auf 'main':"
-echo "  - PR required (1 Approval)"
-echo "  - Trivy + Build müssen grün sein bevor merge erlaubt"
-echo "  → Deploy läuft nur nach PR merge von development → main"
+echo "  Sicherheitsmodell (GitHub Free):"
+echo "  - development pipeline läuft nur auf branch 'development'"
+echo "  - production pipeline (build + deploy) läuft nur auf branch 'main'"
+echo "  - Du kontrollierst selbst wann development → main gemergt wird"
 echo "══════════════════════════════════════════════════════════════"
