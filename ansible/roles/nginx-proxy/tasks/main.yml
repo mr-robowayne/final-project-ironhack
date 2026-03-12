@@ -43,3 +43,8 @@
     name: nginx
     state: started
     enabled: true
+
+- name: nginx neu laden (Config immer aktivieren)
+  ansible.builtin.systemd:
+    name: nginx
+    state: reloaded
