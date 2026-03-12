@@ -23,13 +23,11 @@ fi
 CONFIRM_DPA_CH_EU="${CONFIRM_DPA_CH_EU:-false}"
 CONFIRM_CLOUDFRONT_LOGGING="${CONFIRM_CLOUDFRONT_LOGGING:-false}"
 
-if [[ -z "$S3_BUCKET" || -z "$CLOUDFRONT_DISTRIBUTION_ID" ]]; then
+if [[ -z "$S3_BUCKET" ]]; then
   cat >&2 <<USAGE
 Usage:
+  S3_BUCKET=<bucket> ./scripts/deploy-s3frontend.sh [cloudfront-dist-id]
   S3_BUCKET=<bucket> CLOUDFRONT_DISTRIBUTION_ID=<id> ./scripts/deploy-s3frontend.sh
-  
-  or via args:
-  ./scripts/deploy-s3frontend.sh <bucket> <cloudfront-id>
 USAGE
   exit 1
 fi
@@ -116,11 +114,15 @@ enc_alg="$(aws s3api get-bucket-encryption --bucket "$S3_BUCKET" --query 'Server
 if [[ "$enc_alg" == "aws:kms" ]]; then pass "S3 SSE-KMS Encryption enabled"; elif [[ "$enc_alg" == "AES256" ]]; then warn "S3 using SSE-S3 (AES256). KMS preferred."; else fail "S3 Encryption missing"; fi
 
 # 2e) CloudFront Security
-default_vpp="$(aws cloudfront get-distribution-config --id "$CLOUDFRONT_DISTRIBUTION_ID" --query 'DistributionConfig.DefaultCacheBehavior.ViewerProtocolPolicy' --output text)"
-if [[ "$default_vpp" == "redirect-to-https" || "$default_vpp" == "https-only" ]]; then
-  pass "CloudFront enforces HTTPS"
+if [[ -n "$CLOUDFRONT_DISTRIBUTION_ID" ]]; then
+  default_vpp="$(aws cloudfront get-distribution-config --id "$CLOUDFRONT_DISTRIBUTION_ID" --query 'DistributionConfig.DefaultCacheBehavior.ViewerProtocolPolicy' --output text)"
+  if [[ "$default_vpp" == "redirect-to-https" || "$default_vpp" == "https-only" ]]; then
+    pass "CloudFront enforces HTTPS"
+  else
+    fail "CloudFront allows HTTP!"
+  fi
 else
-  fail "CloudFront allows HTTP!"
+  warn "No CloudFront Distribution ID — HTTPS check skipped"
 fi
 
 # 2f) Compliance Confirmation
