@@ -1,0 +1,65 @@
+---
+# =============================================================================
+# rollback.yml — Auf einen früheren Image-Tag zurückrollen
+#
+# Verwendung:
+#   ansible-playbook playbooks/rollback.yml --ask-vault-pass -e rollback_tag=1.2.2
+#
+# Zeigt verfügbare Tags:
+#   curl -s https://hub.docker.com/v2/repositories/mrrobofliper/patientsync-backend-api/tags \
+#     | python3 -m json.tool | grep '"name"'
+# =============================================================================
+
+- name: patientsync — Rollback
+  hosts: patientsync_backend
+  become: true
+  gather_facts: false
+  serial: 1
+
+  vars_files:
+    - ../group_vars/vault.yml
+
+  vars:
+    image_tag: "{{ rollback_tag | default('') }}"
+
+  pre_tasks:
+    - name: rollback_tag muss gesetzt sein
+      ansible.builtin.fail:
+        msg: "rollback_tag muss angegeben werden: -e rollback_tag=1.2.2"
+      when: rollback_tag is not defined or rollback_tag == ''
+
+    - name: Rollback-Info ausgeben
+      ansible.builtin.debug:
+        msg:
+          - "Host         : {{ inventory_hostname }}"
+          - "Rollback auf : {{ rollback_tag }}"
+
+    - name: Aktuell laufende Images festhalten
+      ansible.builtin.command: docker ps --format "{{ '{{' }}.Names{{ '}}' }}: {{ '{{' }}.Image{{ '}}' }}"
+      register: current_images
+      changed_when: false
+
+    - name: Aktuelle Images ausgeben
+      ansible.builtin.debug:
+        msg: "Aktuell: {{ current_images.stdout_lines }}"
+
+  tasks:
+    - name: Rollback — Images pullen und Container neustarten
+      ansible.builtin.include_role:
+        name: patientsync-deploy
+        tasks_from: main.yml
+
+  post_tasks:
+    - name: Healthcheck nach Rollback
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:{{ ports.nginx }}/api/health"
+        status_code: 200
+        timeout: 10
+      retries: 12
+      delay: 5
+      register: health
+      until: health.status == 200
+
+    - name: Rollback abgeschlossen
+      ansible.builtin.debug:
+        msg: "✓ {{ inventory_hostname }} — Rollback auf Tag '{{ rollback_tag }}' abgeschlossen"

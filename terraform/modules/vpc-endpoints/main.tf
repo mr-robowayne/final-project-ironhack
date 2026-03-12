@@ -10,6 +10,17 @@ locals {
     ecr_api        = var.enable_ecr_api_endpoint
     ecr_dkr        = var.enable_ecr_dkr_endpoint
   }
+
+  # AWS service names use dots (ecr.api, ecr.dkr) but map keys can't contain dots
+  service_name_map = {
+    ssm            = "ssm"
+    ssmmessages    = "ssmmessages"
+    ec2messages    = "ec2messages"
+    logs           = "logs"
+    secretsmanager = "secretsmanager"
+    ecr_api        = "ecr.api"
+    ecr_dkr        = "ecr.dkr"
+  }
 }
 
 resource "aws_security_group" "this" {
@@ -45,7 +56,7 @@ resource "aws_vpc_endpoint" "interface" {
   }
 
   vpc_id              = var.vpc_id
-  service_name        = "com.amazonaws.${data.aws_region.current.name}.${each.value}"
+  service_name        = "com.amazonaws.${data.aws_region.current.name}.${local.service_name_map[each.key]}"
   vpc_endpoint_type   = "Interface"
   subnet_ids          = var.subnet_ids
   security_group_ids  = [aws_security_group.this.id]

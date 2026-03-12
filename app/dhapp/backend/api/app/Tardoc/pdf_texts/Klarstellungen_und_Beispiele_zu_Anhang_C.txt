@@ -1,0 +1,167 @@
+Klarstellungen und Beispiele
+Erläuterndes Dokument zu den Richtlinien für die
+ambulante Leistungserfassung (Anhang C)
+Gültig ab: 01. Januar 2026
+Stand vom: 21. Oktober 2025
+Inhaltsverzeichnis
+Inhaltsverzeichnis .................................................................................................. 1
+Kapitel 2 «Diagnoseerfassung» ................................................................................... 2
+Kapitel 2.1 «Diagnoseerfassung» ................................................................................. 2
+Kapitel 2.1.1 «Mehrere Leistungen oder Sitzungen» .......................................................... 2
+Kapitel 2.1.3 «Verdachtsdiagnosen»............................................................................. 2
+Kapitel 2.1.4 «Akut vs Chronisch» ............................................................................... 3
+Kapitel 2.1.5 «Erkrankungen nach medizinischen Massnahmen» ............................................ 3
+Kapitel 2.1.6 «Syndrome, Neubildungen, zugrunde liegende Krankheiten» ............................... 4
+Kapitel 3 «Ambulante Leistungserfassung» ..................................................................... 5
+Erfassung von Haupt-/Zusatzleistungen ........................................................................ 5
+Erfassung der Lateralität .......................................................................................... 5
+Anhang: Übersicht Beispiele ...................................................................................... 6
+1
+Kapitel 2 «Diagnoseerfassung»
+Kapitel 2.1 «Diagnoseerfassung»
+Beispiel 1
+Konsultation mit Diabetes mellitus Typ 2 (E11.6, nicht Hauptanlass) und diabetischer Arthropathie
+des Kniegelenks zur Kniearthroskopie (M14.26 Hauptanlass, Diagnose, die der erfolgten Behandlung
+in Organbezogenheit bzw. Körperregion am nächsten steht).
+Erfasste Diagnose: M14.26 Diabetische Arthropathie, Unterschenkel
+Beispiel 2
+Eingriff zur Katarakt-Extraktion bei Katarakt (H26.8, Hauptanlass, Diagnose, die der erfolgten
+Behandlung in Organbezogenheit bzw. Körperregion am nächsten steht) aufgrund chronischer
+Mangelernährung (E43, nicht Hauptanlass).
+Erfasste Diagnose: H26.8 Sonstige näher bezeichnete Kataraktformen
+Kapitel 2.1.1 «Mehrere Leistungen oder Sitzungen»
+Beispiel 1
+Eingriff zur Osteosynthese bei distaler Radiusextensionsfraktur (S52.51, grösserer
+Behandlungsaufwand) und Fingerfraktur (S62.62, geringerer Behandlungsaufwand).
+Erfasste Diagnose: S52.51 Distale Fraktur des Radius, Extensionsfraktur
+Kapitel 2.1.3 «Verdachtsdiagnosen»
+Beispiel 1
+Konsultation mit Bauchschmerzen bei Verdacht auf Appendizitis (K35.8, Verdachtsdiagnose). Die
+durchgeführte laparoskopische Appendektomie unter Vollnarkose bestätigt die Verdachtsdiagnose.
+Erfasste Diagnose: K35.8 Akute Appendizitis, nicht näher bezeichnet
+Beispiel 2
+Konsultation mit Knieschmerzen (M25.56) bei Verdacht auf Meniskusriss (S83.2, Verdachtsdiagnose).
+Durchführung von unauffälliger Knie-Arthroskopie unter Vollnarkose. Die Verdachtsdiagnose wird
+ausgeschlossen, keine anderweitige Diagnosestellung.
+Erfasste Diagnose: M25.56 Gelenkschmerz, Unterschenkel
+2
+Beispiel 3
+Konsultation mit axillärer Lymphknotenvergrösserung unklarer Genese zur perkutanen
+Lymphknotenbiopsie in Lokalanästhesie (R59.0, Verdachtsdiagnose). Das Resultat der Biopsie ist
+ausstehend zum Zeitpunkt der Kodierung.
+Erfasste Diagnose: R59.0 Lymphknotenvergrößerung, umschrieben
+Beispiel 4 Radiologische Untersuchung bei Patient mit Verdacht auf Lungenembolie.
+Erfasste Diagnose durch Radiologie:
+Szenario A - Verdachtsdiagnose wird durch die Radiologie bestätigt: Lungenembolie (bestätigte
+Diagnose)
+Szenario B – Verdachtsdiagnose wird durch Radiologie ausgeschlossen und keine andere Diagnose kann
+bestätigt werden: Atemnot (Symptomcode)
+Szenario C – Verdachtsdiagnose wird durch Radiologie ausgeschlossen, aber eine andere Diagnose wird
+gestellt (Lungen-Karzinom): Lungen-Karzinom (neue, bestätigte Diagnose)
+Szenario D – Verdachtsdiagnose wird durch Radiologie nicht ausgeschlossen und nicht bestätigt:
+Lungenembolie (Verdachtsdiagnose)
+Kapitel 2.1.4 «Akut vs Chronisch»
+Beispiel 1
+Konsultation mit einer chronischen Cholezystolithiasis (K80.11) sowie mit einer akuten Cholezystitis
+ohne Angabe einer Gallenwegsobstruktion (K80.00). Aufnahme zur CT-Untersuchung und
+nachfolgender laparoskopischen Cholezystektomie unter Vollnarkose.
+Erfasste Diagnose: K80.00 Gallenblasenstein mit akuter Cholezystitis
+ohne Angabe einer Gallenwegsobstruktion
+Beispiel 2
+Gastroskopie zur Abklärung einer Anämie. Während der Gastroskopie zeigt sich ein akutes Magenulkus
+mit Blutung (K25.0) sowie chronische Ulcera ohne Blutungszeichen (K25.7). Die Blutung wird
+endoskopisch gestillt.
+Erfasste Diagnose: K25.0 Ulcus ventriculi Akut, mit Blutung
+Kapitel 2.1.5 «Erkrankungen nach medizinischen Massnahmen»
+Beispiel 1
+Konsultation zur Kniegelenkspunktion bei Infektion einer Knie-Endoprothese in Lokalanästhesie
+(T84.7).
+Erfasste Diagnose: T84.5 Infektion und entzündliche Reaktion durch eine
+Gelenkendoprothese
+Beispiel 2
+Eingriff zur Entfernung einer gebrochenen Osteosynthese-Platte (T84.12) am Handgelenk in (Plexus-)
+Regionalanästhesie.
+3
+Erfasste Diagnose: T84.12 Mechanische Komplikation durch eine interne
+Osteosynthesevorrichtung an Extremitätenknochen;
+Unterarm und Handgelenk
+Beispiel 3
+Eingriff zur Entfernung einer vorstehenden, schmerzhaften Schraube nach vorausgegangener
+Osteosynthese am Fussgelenk (T84.8) in Lokalanästhesie.
+Erfasste Diagnose: T84.8 Sonstige Komplikationen durch orthopädische
+Endoprothesen, Implantate oder Transplantate
+Beispiel 4
+Eingriff zum Débridement eines Hautabszesses (L02.4) in Lokalanästhesie nach Osteosynthese am
+Unterarm 2 Wochen zuvor.
+Erfasste Diagnose: L02.4 Hautabszess, Furunkel und Karbunkel an
+Extremitäten
+Beispiel 5
+Konsultation zur Harnröhrendilatation bei Rezidiv einer Harnröhrenstriktur (N99.10).
+Erfasste Diagnose: N99.10 Harnröhrenstriktur-Rezidiv nach
+vorangegangener Operation einer Harnröhrenstriktur
+Kapitel 2.1.6 «Syndrome, Neubildungen, zugrunde liegende Krankheiten»
+Beispiel 1
+Konsultation zur Botulinustoxin-Injektion in den Harnblasensphinkter bei Dranginkontinenz (N39.42,
+Manifestation) aufgrund einer Multiplen Sklerose (G35.10, zugrunde liegende Krankheit).
+Erfasste Diagnose: N39.42 Dranginkontinenz
+Beispiel 2
+Konsultation zur Exzision einer Hautmetastase (C79.2, Manifestation) bei bösartiger Neubildung der
+Brustdrüse (C50.2, zugrunde liegende Krankheit) unter Vollnarkose.
+Erfasste Diagnose: C79.2 Sekundäre bösartige Neubildung der Haut.
+Beispiel 3
+Konsultation zur Hernienplastik unter Vollnarkose bei einseitigem Leistenbruch (K40.90,
+Manifestation) aufgrund eines Marfansyndroms (Q87.4, zugrunde liegende Krankheit).
+Erfasste Diagnose: K40.90 Hernia inguinalis, einseitig oder ohne
+Seitenangabe, ohne Einklemmung und ohne Gangrän,
+nicht als Rezidivhernie bezeichnet
+4
+Kapitel 3 «Ambulante Leistungserfassung»
+Zusatzpositionen (Typ «PZ») können immer erfasst werden, wenn die entsprechende Hauptleistung
+erbracht wurde. Zusatzpositionen sind jeweils dem inhaltlich zugehörigen Kapitel der Hauptleistungen
+zugeordnet, welche anhand der Buchstabenfolge nach dem ersten Punkt erkennbar ist:
+Erfassung von Haupt-/Zusatzleistungen
+Beispiel 1
+Leistungserfassung nach einer PTCA mit Einlage von 2 Stents.
+Anzahl Seite Leistungspositionen
+1 - C05.KC.0070 PCI/PTCA
+2 - C05.KC.Z007 Stentimplantation bei PCI
+Erfassung der Lateralität
+Beispiel 2
+Leistungserfassung nach Arthroskopie der rechten Schulter mit Entnahme von einer Biopsie.
+Anzahl Seite Leistungspositionen
+1 R C08.CA.0010 Arthroskopie der Schulter
+1 R C08.CA.Z001 Biopsie(n) bei Arthroskopie der Schulter
+5
+Anhang: Übersicht Beispiele
+Kapitel Stichwort Beispiel Erstmalige Zuletzt
+Publikation geändert
+2.1 Diagnoseerfassung 1 08.08.2025
+2.1 Diagnoseerfassung 2 08.08.2025
+2.1.1 Mehrere Leistungen oder Sitzungen 1 08.08.2025
+2.1.3 Verdachtsdiagnosen 1 08.08.2025
+2.1.3 Verdachtsdiagnosen 2 08.08.2025
+2.1.3 Verdachtsdiagnosen 3 08.08.2025
+2.1.3 Verdachtsdiagnosen 4 21.10.2025
+2.1.4 Akut vs Chronisch 1 08.08.2025
+2.1.4 Akut vs Chronisch 2 08.08.2025
+2.1.5 Erkrankungen nach medizinischen 1 08.08.2025
+Massnahmen
+2.1.5 Erkrankungen nach medizinischen 2 08.08.2025
+Massnahmen
+2.1.5 Erkrankungen nach medizinischen 3 08.08.2025
+Massnahmen
+2.1.5 Erkrankungen nach medizinischen 4 08.08.2025
+Massnahmen
+2.1.5 Erkrankungen nach medizinischen 5 08.08.2025
+Massnahmen
+2.1.6 Syndrome, Neubildungen, zugrunde 1 08.08.2025
+liegende Krankheiten
+2.1.6 Syndrome, Neubildungen, zugrunde 2 08.08.2025
+liegende Krankheiten
+2.1.6 Syndrome, Neubildungen, zugrunde 3 08.08.2025
+liegende Krankheiten
+3 Ambulante Leistungserfassung: 1 08.08.2025
+Erfassung von Haupt-/Zusatzleistungen
+3 Ambulante Leistungserfassung: 2 08.08.2025
+Erfassung der Lateralität
+6

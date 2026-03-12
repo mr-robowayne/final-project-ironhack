@@ -3,7 +3,7 @@ set -e
 
 # --- KONFIGURATION ---
 # BITTE ANPASSEN: Dein GitHub Benutzername oder Organisationsname
-GITHUB_ORG="<DEIN_GITHUB_USER_ODER_ORG>" 
+GITHUB_ORG="mr-robowayne" 
 REPO_NAME="patientsync"
 AWS_REGION="eu-central-2"
 AWS_ACCOUNT_ID="648786395667"

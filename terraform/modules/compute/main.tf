@@ -17,7 +17,8 @@ locals {
   enable_data_access_policy = var.enable_ssm_profile && (
     length(var.backend_secret_arns) > 0 ||
     length(var.backend_kms_key_arns) > 0 ||
-    length(var.backend_ssm_parameter_paths) > 0
+    length(var.backend_ssm_parameter_paths) > 0 ||
+    length(var.backend_s3_document_bucket_arns) > 0
   )
 }
 
@@ -160,9 +161,13 @@ data "aws_iam_policy_document" "backend_data_access" {
   dynamic "statement" {
     for_each = length(var.backend_kms_key_arns) > 0 ? [1] : []
     content {
-      sid       = "KmsDecryptAccess"
-      effect    = "Allow"
-      actions   = ["kms:Decrypt", "kms:DescribeKey"]
+      sid    = "KmsDecryptAccess"
+      effect = "Allow"
+      actions = [
+        "kms:Decrypt",
+        "kms:DescribeKey",
+        "kms:GenerateDataKey*",
+      ]
       resources = var.backend_kms_key_arns
     }
   }
@@ -181,6 +186,31 @@ data "aws_iam_policy_document" "backend_data_access" {
         for path in var.backend_ssm_parameter_paths :
         "arn:aws:ssm:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:parameter${path}/*"
       ]
+    }
+  }
+
+  dynamic "statement" {
+    for_each = length(var.backend_s3_document_bucket_arns) > 0 ? [1] : []
+    content {
+      sid    = "S3DocumentsObjects"
+      effect = "Allow"
+      actions = [
+        "s3:PutObject",
+        "s3:GetObject",
+        "s3:DeleteObject",
+        "s3:HeadObject",
+      ]
+      resources = [for arn in var.backend_s3_document_bucket_arns : "${arn}/*"]
+    }
+  }
+
+  dynamic "statement" {
+    for_each = length(var.backend_s3_document_bucket_arns) > 0 ? [1] : []
+    content {
+      sid       = "S3DocumentsListBucket"
+      effect    = "Allow"
+      actions   = ["s3:ListBucket"]
+      resources = var.backend_s3_document_bucket_arns
     }
   }
 }

@@ -1,0 +1,920 @@
+/* Allgemeines Styling */
+body, html {
+  font-family: 'Arial', sans-serif;
+  background: linear-gradient(135deg, #ffffff, #f0f8ff);
+  margin: 20px;
+  padding: 0;
+  height: 100%;
+}
+
+.App {
+  width: calc(100% - 120px); /* 100% minus Sidebar (100px) plus 20px Abstand rechts */
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  padding: 20px;
+  margin-left: 100px; /* Sidebar-Breite */
+  background: linear-gradient(135deg, #ffffff, #f0f8ff);
+  box-sizing: border-box;
+}
+
+
+
+.header:hover {
+  transform: scale(1.02);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
+}
+
+.header h1 {
+  color: white;
+  font-size: 2.5rem;
+}
+
+
+
+
+/* CSS PART 1
+
+
+/* Datei Modal Overlay */
+.file-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0, 0, 0, 0);
+  backdrop-filter: blur(6px);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 9999;
+  transition: opacity 0.3s ease;
+}
+
+/* Datei Modal */
+.file-modal {
+  background: rgba(255, 255, 255, 0.582);
+  border: 1px solid rgba(255, 255, 255, 0);
+  border-radius: 20px;
+  padding: 2rem 2.5rem;
+  width: 95%;
+  max-width: 600px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(15px);
+  position: relative;
+  z-index: 10000;
+  font-family: 'Segoe UI', sans-serif;
+  color: black;
+  animation: fadeInUp 0.3s ease;
+}
+
+/* Animation */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Modal Überschrift */
+.file-modal h2 {
+  text-align: center;
+  color: #0078d4;
+  font-size: 1.8rem;
+  font-weight: 700;
+  margin-bottom: 1.5rem;
+}
+
+/* Dateiliste */
+.file-list {
+  margin-top: 1rem;
+}
+
+.file-list h3 {
+  font-size: 1.2rem;
+  color: black;
+  margin-bottom: 0.8rem;
+}
+
+.file-list ul {
+  list-style-type: none;
+  padding: 0;
+  margin: 0;
+}
+
+.file-list li {
+  background: rgba(255, 255, 255, 0.39);
+  margin: 6px 0;
+  padding: 12px 16px;
+  border-radius: 12px;
+  font-size: 1rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: black;
+  border: 1px solid rgba(0,0,0,0.08);
+  transition: background-color 0.3s ease, box-shadow 0.3s ease;
+  cursor: default;
+}
+
+.file-list li:hover {
+  background-color: rgba(0, 198, 255, 0.15); /* sanftes hellblau */
+  box-shadow: 0 4px 10px rgba(0, 198, 255, 0.3);
+}
+
+/* Links in Dateiliste */
+.file-list a {
+  color: #0078d4;
+  text-decoration: none;
+  transition: color 0.3s ease;
+}
+
+.file-list a:hover {
+  color: #005a9e;
+  text-decoration: underline;
+}
+
+/* Datei auswählen Button */
+.upload-button {
+  background: linear-gradient(135deg, #0078d4, #00c6ff);
+  color: white;
+  padding: 12px 25px;
+  border-radius: 12px;
+  border: none;
+  font-size: 1rem;
+  cursor: pointer;
+  width: 100%;
+  margin-top: 1rem;
+  transition: background 0.3s ease, transform 0.3s ease;
+  font-weight: 600;
+  box-shadow: 0 4px 15px rgba(0, 120, 212, 0.4);
+}
+
+.upload-button:hover {
+  background: linear-gradient(135deg, #005a9e, #008cff);
+  transform: translateY(-3px);
+}
+
+.upload-button:active {
+  transform: translateY(0);
+}
+
+/* Datei hochladen Button */
+.btn {
+  background: linear-gradient(135deg, #ffffff, #970606);
+  color: white;
+  padding: 15px;
+  border: none;
+  border-radius: 15px;
+  font-size: 1rem;
+  cursor: pointer;
+  width: 100%;
+  margin-top: 1rem;
+  font-weight: 600;
+  transition: background 0.3s ease, transform 0.3s ease;
+  box-shadow: 0 4px 15px rgba(23, 162, 184, 0.4);
+}
+
+.btn:hover {
+  background: linear-gradient(135deg, #0078d4, #00c6ff);
+  transform: translateY(-3px);
+}
+
+.btn:active {
+  transform: translateY(0);
+}
+
+
+/* Datei hochladen Button */
+.btn {
+  background: linear-gradient(135deg, #ffffff, #f59300);
+  color: white;
+  padding: 15px;
+  border: none;
+  border-radius: 15px;
+  font-size: 1rem;
+  cursor: pointer;
+  width: 100%;
+  margin-top: 15px;
+  transition: all 0.3s ease;
+}
+
+.btn:hover {
+  background: linear-gradient(135deg, #0078d4, #00c6ff);
+  transform: translateY(-3px);
+}
+
+.btn:active {
+  transform: translateY(0);
+}
+
+/* css part 2 
+
+/* Loading Spinner */
+.loading-overlay {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+}
+
+.spinner {
+  border: 8px solid #f3f3f3;
+  border-top: 8px solid #00c6ff;
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  animation: spin 2s linear infinite;
+}
+
+/* Spinner Animation */
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Close Button */
+/* Close Button */
+/* Close Button */
+.close-modal {
+  background: linear-gradient(135deg, #ff4d4f, #e63946);
+  color: white;
+  padding: 12px; /* Kleinere Größe */
+  border-radius: 50%; /* Macht den Button perfekt rund */
+  position: absolute;
+  top: 15px;
+  right: 15px;
+  border: none;
+  cursor: pointer;
+  font-size: 1.5rem; /* Etwas kleinere Schriftgröße */
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 40px; /* Feste Breite */
+  height: 40px; /* Feste Höhe */
+  box-shadow: 0 6px 15px rgba(0, 0, 0, 0.1);
+  transition: all 0.3s ease;
+}
+
+.close-modal:hover {
+  background: linear-gradient(135deg, #e63946, #ff4d4f);
+  transform: scale(1.1);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+}
+
+.close-modal:active {
+  transform: scale(1);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
+}
+
+.close-modal i {
+  font-size: 1.6rem; /* Größeres Icon im Button */
+}
+
+
+
+/* Suchfeld Styling */
+.search-bar {
+  position: relative;
+  margin: 20px auto;
+  max-width: 500px;
+  width: 100%;
+}
+
+
+.search-bar input {
+  width: 100%;
+  padding: 12px 15px;
+  border: 2px solid #ccc;
+  border-radius: 10px;
+  font-size: 1rem;
+  background-color: #f8f9fa;
+  transition: all 0.3s ease;
+  box-sizing: border-box;
+}
+
+
+.search-bar input:focus {
+  outline: none;
+  border-color: #0078d4;
+  background-color: #ffffff;
+  box-shadow: 0px 0px 10px rgba(0, 120, 212, 0.3);
+}
+
+
+.search-bar input::placeholder {
+  color: #888;
+  font-style: italic;
+}
+
+
+.search-bar input:hover {
+  border-color: #00c6ff;
+  background-color: #f0f8ff;
+}
+
+
+hr {
+  border: none;
+  height: 2px; /* Dicke der Linie */
+  background: linear-gradient(135deg,  #d47f00, #005ea7);
+  margin: 20px 0;
+  opacity: 0.8;
+}
+
+
+
+.popup-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  /* Apple-like frosted glass overlay: leicht durchsichtig + Blur */
+  background-color: rgba(255, 255, 255, 0.45);
+  backdrop-filter: blur(8px) saturate(120%);
+  -webkit-backdrop-filter: blur(8px) saturate(120%);
+  z-index: 9999;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 1rem;
+}
+
+.popup-container {
+  width: 96vw;
+  max-width: 1800px;
+  min-width: 1200px;
+  /* Apple-like frosted panel: leicht durchsichtig + feiner Schatten */
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(12px) saturate(120%);
+  -webkit-backdrop-filter: blur(12px) saturate(120%);
+  padding: 2rem;
+  border-radius: 15px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
+  overflow-y: auto;
+  max-height: 95vh;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  animation: fadeInUp 0.3s ease-out;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 1rem;
+}
+
+.form-group label {
+  font-weight: bold;
+  margin-bottom: 0.3rem;
+  color: rgb(0, 0, 0);
+}
+
+input,
+select,
+textarea {
+  width: 100%;
+  padding: 0.6rem 0.8rem;
+  border-radius: 12px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  background: rgb(255, 255, 255);
+  color: black;
+  font-size: 1rem;
+  resize: vertical;
+  box-sizing: border-box;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: rgba(0, 0, 0, 0.801);
+}
+
+select option {
+  color: black;
+}
+
+.button-container,
+.actions {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-top: 1rem;
+}
+
+button,
+.btn {
+  padding: 0.7rem 1.5rem;
+  border-radius: 10px;
+  cursor: pointer;
+  font-weight: bold;
+  border: none;
+  transition: all 0.3s ease;
+  white-space: nowrap;
+}
+
+.btn-save,
+.save-button-kons {
+  background: linear-gradient(135deg, #00c6ff, #0072ff);
+  color: white;
+  box-shadow: 0 4px 10px rgba(0,114,255,0.6);
+}
+
+.btn-save:hover,
+.save-button-kons:hover {
+  background: linear-gradient(135deg, #0072ff, #00c6ff);
+}
+
+.btn-cancel,
+.close-button-kons {
+  background: transparent;
+  border: 1px solid rgba(0, 0, 0, 0.3);
+  color: black;
+}
+
+.btn-cancel:hover,
+.close-button-kons:hover {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+.h2,
+.popup-container h2 {
+  text-align: center;
+  color: #045fa5;
+  font-weight: 700;
+  font-size: 1.6rem;
+  margin-bottom: 1rem;
+}
+
+/* Responsive: Mobile Optimierung */
+@media (max-width: 768px) {
+  .popup-container {
+    padding: 1rem;
+  }
+
+  .form-group {
+    margin-bottom: 0.8rem;
+  }
+
+  .button-container button,
+  .btn {
+    padding: 0.6rem 1rem;
+    font-size: 0.9rem;
+  }
+}
+
+
+.tab-buttons {
+  display: flex;
+  overflow-x: auto;
+  border-bottom: 2px solid #ddd;
+  margin-bottom: 20px;
+  padding-bottom: 5px;
+  gap: 10px;
+  scrollbar-width: thin;
+  scrollbar-color: #00bcd4 transparent;
+}
+
+.tab-buttons button {
+  flex: none;
+  padding: 10px 20px;
+  background-color: transparent;
+  border: none;
+  border-bottom: 3px solid transparent;
+  font-weight: bold;
+  cursor: pointer;
+  color: #555;
+  transition: border-color 0.3s, color 0.3s;
+}
+
+.tab-buttons button:hover {
+  color: #00bcd4;
+}
+
+.tab-buttons .active-tab {
+  border-bottom: 3px solid #00bcd4;
+  color: #00bcd4;
+}
+
+.patient-form {
+  background: white;
+  padding: 20px;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.main_div_form {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+label {
+  font-weight: bold;
+  margin-top: 10px;
+}
+
+input[type="text"],
+input[type="date"],
+textarea {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+}
+
+.preview-box {
+  background: #f9f9f9;
+  padding: 15px;
+  border-radius: 8px;
+  border: 1px solid #ddd;
+}
+
+.button-row {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.btn-primary {
+  background-color: #00bcd4;
+  color: white;
+  border: none;
+  padding: 10px 15px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.btn-danger {
+  background-color: #f44336;
+  color: white;
+  border: none;
+  padding: 10px 15px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.popup-container.wide-popup {
+  width: 55vw;          /* 95% der Viewport-Breite */
+  max-width: none;      /* max-width aufheben */
+  max-height: 95vh;     /* maximale Höhe beibehalten */
+}
+
+
+
+/* css part 3
+/* Optional: schöner Scroll für multiple selects */
+.form-group select[multiple] {
+  height: 120px;
+  overflow-y: auto;
+}
+
+/* Buttons */
+.actions {
+  display: flex;
+  justify-content: center;
+  gap: 20px; /* Abstand zwischen den Buttons */
+  margin-top: 30px;
+}
+
+.save-button-kons,
+.close-button-kons {
+  flex: 1 1 150px; /* Gleiche Mindestgröße, flexibel wachsend */
+  max-width: 200px;
+  padding: 12px 20px;
+  font-size: 16px;
+  font-weight: 500;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+
+  text-align: center;
+
+}
+
+/* Speichern-Button */
+.save-button-kons {
+  background-color: #00796b;
+  color: rgb(216, 202, 11);
+}
+
+.save-button-kons:hover {
+  background-color: #005f56;
+  transform: scale(1.02);
+}
+
+/* Abbrechen-Button */
+.close-button-kons {
+  background-color: red !important;
+  color: #d40606;
+}
+
+.close-button-kons:hover {
+  background-color: #960b0b;
+  transform: scale(1.02)
+}
+
+.fa-icon {
+  filter: drop-shadow(0 0 5px rgba(0, 180, 216, 0.7));
+  color: white /* Türkisblau */
+  
+}
+
+
+
+
+/* header / Btns main */
+
+/* Header klarer, weniger Blur & etwas weniger transparent, Text leicht transparent und mit Schatten */
+.header {
+  background: rgba(255, 140, 0, 0.35); /* klarer, satter */
+  backdrop-filter: blur(6px);          /* weniger Blur */
+  -webkit-backdrop-filter: blur(6px);
+  border-radius: 20px;
+  padding: 40px 25px;
+  color: rgba(0, 0, 0, 0.8);           /* leicht transparent */
+  font-weight: 700;
+  text-align: center;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08); /* zarter Schatten */
+  text-shadow: 0 1px 3px rgba(255, 255, 255, 0.7); /* leichter Lichtschein */
+}
+
+/* Buttons klarer & kräftiger, Text leicht transparent mit Schatten */
+.btn {
+  background: linear-gradient(135deg,  #f3a32c, #215680);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+  color: rgba(255, 255, 255, 0.9);    /* leicht transparent */
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5); /* leichter Schatten */
+  border-radius: 20px;
+  padding: 18px 30px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background-color 0.3s ease, box-shadow 0.3s ease;
+  user-select: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 10px;
+}
+
+
+.btn:hover {
+  background: rgba(8, 174, 224, 0.733); /* weniger transparent, kräftiger */
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.btn i {
+  margin-right: 12px;
+  color: rgba(255, 255, 255, 0.9);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+}
+
+/* Buttons Container */
+.buttons-container {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+
+/* Compact top toolbar */
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 8px 0 16px 0;
+}
+
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #0f172a;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+}
+
+.icon-btn:hover { background: #f8fafc; }
+.icon-btn:active { background: #eef2f7; }
+
+/* Labels leicht transparent, etwas kleiner, mit Abstand & Schatten für „floating“ */
+.modal-content label {
+  color: rgba(0, 0, 0, 0.5);           /* halbtransparent */
+  font-weight: 600;
+  font-size: 0.9rem;
+  display: block;
+  margin-bottom: 6px;                   /* Abstand zum Input */
+  position: relative;
+  top: -4px;                          /* hebt das Label leicht nach oben */
+  user-select: none;
+  transition: color 0.3s ease;
+  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.6); /* leichter Lichtschein */
+}
+
+/* FA ICONS*/
+/* Icons genau wie die Labels stylen */
+.fa-icon-floating {
+  color: rgba(0, 0, 0, 0.5);               /* gleiche halbtransparente Farbe wie Labels */
+  position: relative;
+  top: -4px;                               /* genauso wie die Labels leicht nach oben */
+  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.6); /* gleicher leichter Lichtschein */
+  transition: color 0.3s ease;
+  user-select: none;
+  display: inline-block;                   /* passt gut zu Icons */
+}
+
+
+/* Tabellenstil */
+.patients-table table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  border-radius: 20px;
+  overflow: hidden;
+  background: linear-gradient(135deg, #f9fcff, #eaf6ff);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+.patients-table th, .patients-table td {
+  padding: 16px 18px;
+  text-align: left;
+  font-size: 16px;
+  border-bottom: 1px solid #e3eaf0;
+  border-right: 1px solid #e3eaf0;
+}
+
+.patients-table th:last-child, .patients-table td:last-child {
+  border-right: none;
+}
+
+.patients-table th {
+  background: #215680;
+  color: white;
+  text-transform: none;
+  letter-spacing: 0.5px;
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.patients-table tr:nth-child(odd) {
+  background-color: #ffffff;
+  color: #000000;
+}
+
+.patients-table tr:nth-child(even) {
+  background-color: #215680;
+  color: white;
+}
+
+.patients-table tr:hover {
+  background: linear-gradient(135deg,  #d47f0042, #005fa74b);
+  color: #0f3d57;
+  transition: background 0.3s ease;
+}
+
+.patients-table tr:active {
+  background-color: #cbe6ff;
+  color: #003a75;
+}
+
+/* Formularstil */
+.patient-form {
+  background: linear-gradient(145deg, #ffffff, #f1f9ff);
+  padding: 40px;
+  border-radius: 20px;
+  box-shadow: 0px 12px 30px rgba(0, 0, 0, 0.06);
+  max-width: 1000px;
+  margin: auto;
+  width: 95%;
+  transition: all 0.3s ease;
+}
+
+.patient-form:hover {
+  transform: scale(1.01);
+}
+
+.patient-form h2 {
+  color: #025fa7;
+  text-align: center;
+  font-size: 26px;
+  margin-bottom: 20px;
+}
+
+.patient-form label {
+  font-weight: 500;
+  display: block;
+  margin-top: 12px;
+  color: #333;
+}
+
+.patient-form input,
+.patient-form textarea {
+  width: 100%;
+  padding: 12px 14px;
+  margin-top: 6px;
+  border: 1px solid #cfdce6;
+  border-radius: 12px;
+  background: #fbfdff;
+  font-size: 16px;
+  transition: border 0.3s ease, box-shadow 0.3s ease;
+}
+
+.patient-form input:focus,
+.patient-form textarea:focus {
+  outline: none;
+  border-color: #0078d4;
+  box-shadow: 0 0 0 3px rgba(0, 120, 212, 0.2);
+}
+
+/* Button-Stil */
+.submit-button {
+  background: linear-gradient(135deg, #0078d4, #00b3ff);
+  color: white;
+  font-size: 17px;
+  padding: 15px;
+  border: none;
+  border-radius: 15px;
+  cursor: pointer;
+  width: 100%;
+  margin-top: 20px;
+  font-weight: 600;
+  transition: background 0.3s ease;
+}
+
+.submit-button:hover {
+  background: linear-gradient(135deg, #005a9e, #009de0);
+}
+
+.invisible-hr {
+  border: none;
+  height: 1px;
+  background: linear-gradient(to right, 
+    rgba(0,0,0,0), 
+    rgba(0,0,0,0.1), 
+    rgba(0,0,0,0), 
+    rgba(0,0,0,0.1), 
+    rgba(0,0,0,0));
+  margin: 8px 0;
+}
+
+.floating-button {
+  position: fixed;
+  bottom: 40px;
+  right: 40px;
+  width: 60px;
+  height: 60px;
+  background: rgba(255, 255, 255, 0.993);
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: 0 8px 32px rgba(31, 38, 135, 0.37);
+  color: #008cba;
+  font-size: 2.5rem;
+  cursor: pointer;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  transition: background 0.3s ease;
+  user-select: none;
+}
+
+.floating-button:hover {
+  background: rgba(255, 255, 255, 0.45);
+  color: #005f7a;
+}

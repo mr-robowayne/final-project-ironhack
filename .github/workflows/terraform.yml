@@ -16,7 +16,7 @@ on:
       - development # targeting development
     paths:
       - 'terraform/**'  # only trigger when terraform files change
-      - '.github/action-loggs/**'  # only trigger when terraform files change -> for pipeline-testing
+      - '.github/action-loggs/terraform/**'  # only trigger when terraform files change -> for pipeline-testing
 
 permissions:
   id-token: write # This is required for requesting the JWT for AWS OIDC

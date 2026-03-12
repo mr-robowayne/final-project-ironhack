@@ -1,0 +1,65 @@
+name: Frontend CI/CD
+
+on:
+  push:
+    branches: [ main, development ]
+    paths:
+      - 'app/dhapp/frontend/**'
+      - 'app/dhapp/admin/**'
+      - '.github/workflows/frontend.yml'
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  build-and-deploy:
+    name: Build & Deploy Frontend
+    runs-on: ubuntu-latest
+    # Environment Logik: Wählt 'production' für main, sonst 'development'
+    environment: ${{ github.ref == 'refs/heads/main' && 'production' || 'development' }}
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      # Login mit der neuen Frontend-Role
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_FRONTEND_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      # Check Docker (Standard auf GitHub Runners, aber sicher ist sicher)
+      - name: Check Docker
+        run: docker info
+
+      # -----------------------------------------------
+      # CASE 1: DEVELOPMENT (Nur Build Test)
+      # -----------------------------------------------
+      - name: Build Test (Development)
+        if: github.ref != 'refs/heads/main'
+        env:
+          LOAD_FRONTEND_ENV_FROM_SSM: true
+        run: |
+          echo "🧪 Running Test Build..."
+          bash app/dhapp/admin/export_frontend_bundle.sh
+
+      # -----------------------------------------------
+      # CASE 2: PRODUCTION (Build + Deploy)
+      # -----------------------------------------------
+      - name: Deploy to S3 (Production)
+        if: github.ref == 'refs/heads/main'
+        env:
+          # Diese Variablen musst du in GitHub Secrets/Vars anlegen!
+          BUCKET_NAME: ${{ vars.FRONTEND_BUCKET_NAME }}
+          CF_DIST_ID: ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }}
+          # Bestätigung für Compliance Checks im Skript
+          CONFIRM_DPA_CH_EU: "true"
+          CONFIRM_CLOUDFRONT_LOGGING: "true"
+        run: |
+          echo "🚀 Deploying to Production..."
+          # Skript ausführbar machen
+          chmod +x scripts/deploy-s3frontend.sh
+          # Deploy Skript aufrufen
+          ./scripts/deploy-s3frontend.sh "$BUCKET_NAME" "$CF_DIST_ID"

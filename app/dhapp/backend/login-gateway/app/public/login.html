@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Login</title>
+    <link rel="stylesheet" href="/login.css" />
+  </head>
+  <body>
+    <div class="loginpage-wrapper">
+      <div id="bootLoader" class="loader-container">
+        <div class="apple-spinner"></div>
+      </div>
+
+      <div id="loginContent" class="loginpage-outer-wrapper" style="display: none;">
+        <div class="loginpage-logo-wrapper">
+          <div class="loginpage-heartbeat-left"></div>
+          <img class="loginpage-logo" src="/assets/logo.png" alt="Logo" />
+          <div class="loginpage-heartbeat-right">
+            <svg viewBox="0 0 200 30" class="loginpage-svg">
+              <path
+                d="M0 15 L20 15 L30 5 L40 25 L50 15 L70 15 L80 10 L90 20 L100 15 L200 15"
+                class="loginpage-heartbeat-path"
+              ></path>
+            </svg>
+          </div>
+        </div>
+
+        <div class="loginpage-form-container">
+          <h2>Login</h2>
+
+          <input
+            id="tenant"
+            type="text"
+            placeholder="Mandant"
+            autocomplete="organization"
+            class="loginpage-input"
+          />
+          <div id="tenantStatus" class="loginpage-tenant-status" style="display: none;"></div>
+          <br />
+
+          <input
+            id="username"
+            type="text"
+            placeholder="Benutzername"
+            autocomplete="username"
+            class="loginpage-input"
+          />
+          <br />
+
+          <input
+            id="password"
+            type="password"
+            placeholder="Passwort"
+            autocomplete="current-password"
+            class="loginpage-input"
+          />
+          <br />
+
+          <button id="loginButton" class="loginpage-button">Einloggen</button>
+
+          <p id="errorMessage" class="loginpage-error-message" style="display: none;"></p>
+          <noscript>
+            <p class="loginpage-error-message">JavaScript ist deaktiviert - bitte aktivieren.</p>
+          </noscript>
+        </div>
+      </div>
+    </div>
+
+    <script src="/login.js"></script>
+  </body>
+</html>

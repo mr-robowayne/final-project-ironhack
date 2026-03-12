@@ -1,0 +1,47 @@
+# AWS EC2 Dynamic Inventory — patientsync
+# Fragt AWS automatisch ab welche EC2s gerade laufen (kein manuelles IP-Pflegen).
+#
+# Voraussetzungen:
+#   pip install boto3 botocore
+#   ansible-galaxy collection install amazon.aws community.docker community.aws
+#
+# Testen:
+#   ansible-inventory --graph
+#   ansible-inventory --list
+
+plugin: amazon.aws.aws_ec2
+
+regions:
+  - eu-central-2
+
+# Nur laufende patientsync-EC2s
+filters:
+  tag:Project: patientsync
+  tag:Environment: prod
+  instance-state-name: running
+
+# ansible_host = instance_id (z.B. i-0abc123def456789)
+# SSM Session Manager braucht die Instance-ID, keine IP-Adresse
+compose:
+  ansible_host: instance_id
+
+# Lesbarer Name im Inventory = EC2 Name-Tag
+hostnames:
+  - tag:Name
+  - instance-id
+
+# Gruppen nach Tags
+keyed_groups:
+  - key: tags.AZ
+    prefix: az
+    separator: "_"
+  - key: tags.Tier
+    prefix: tier
+    separator: "_"
+  - key: tags.Environment
+    prefix: env
+    separator: "_"
+
+# Gruppe "patientsync_backend" = alle Backend-EC2s (beide AZs)
+groups:
+  patientsync_backend: "'patientsync' in tags.get('Project', '')"

@@ -107,6 +107,12 @@ variable "backend_ssm_parameter_paths" {
   default     = []
 }
 
+variable "backend_s3_document_bucket_arns" {
+  description = "S3 bucket ARNs for patient documents. Grants EC2 instances PutObject, GetObject, DeleteObject, HeadObject, ListBucket."
+  type        = list(string)
+  default     = []
+}
+
 variable "tags" {
   description = "Tags applied to all compute resources."
   type        = map(string)

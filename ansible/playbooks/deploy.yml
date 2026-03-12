@@ -1,0 +1,64 @@
+---
+# =============================================================================
+# deploy.yml — Neue Images pullen und Container neustarten (Rolling Deploy)
+#
+# Setzt voraus dass site.yml bereits einmal gelaufen ist (Docker + nginx OK).
+#
+# Verwendung:
+#   ansible-playbook playbooks/deploy.yml --ask-vault-pass -e image_tag=1.2.3
+#
+# Nach build-and-push.sh:
+#   ./scripts/docker/build-and-push.sh 1.2.3
+#   cd ansible && ansible-playbook playbooks/deploy.yml --ask-vault-pass -e image_tag=1.2.3
+# =============================================================================
+
+- name: patientsync — Rolling Deploy
+  hosts: patientsync_backend
+  become: true
+  gather_facts: false
+  serial: 1          # Erst EC2-A, dann EC2-B → keine Downtime
+
+  vars_files:
+    - ../group_vars/vault.yml
+
+  pre_tasks:
+    - name: Deploy-Info ausgeben
+      ansible.builtin.debug:
+        msg:
+          - "Host      : {{ inventory_hostname }}"
+          - "Neuer Tag : {{ image_tag }}"
+
+    - name: Image-Tag muss gesetzt sein
+      ansible.builtin.fail:
+        msg: "image_tag muss angegeben werden: -e image_tag=1.2.3"
+      when: image_tag == "latest"
+
+  tasks:
+    - name: Env-Dateien aktualisieren
+      ansible.builtin.include_role:
+        name: patientsync-deploy
+        tasks_from: main.yml
+
+  post_tasks:
+    - name: Laufende Container prüfen
+      ansible.builtin.command: docker ps --format "table {{ '{{' }}.Names{{ '}}' }}\t{{ '{{' }}.Status{{ '}}' }}\t{{ '{{' }}.Image{{ '}}' }}"
+      register: docker_ps
+      changed_when: false
+
+    - name: Container-Status ausgeben
+      ansible.builtin.debug:
+        msg: "{{ docker_ps.stdout_lines }}"
+
+    - name: Healthcheck nach Deploy
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:{{ ports.nginx }}/api/health"
+        status_code: 200
+        timeout: 10
+      retries: 12
+      delay: 5
+      register: health
+      until: health.status == 200
+
+    - name: Deploy erfolgreich
+      ansible.builtin.debug:
+        msg: "✓ {{ inventory_hostname }} — Deploy abgeschlossen (Tag: {{ image_tag }})"

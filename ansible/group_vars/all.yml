@@ -1,0 +1,65 @@
+---
+# =============================================================================
+# group_vars/all.yml — Gemeinsame Variablen für alle Hosts
+# =============================================================================
+
+# ── AWS ECR ───────────────────────────────────────────────────────────────────
+ecr_registry: "648786395667.dkr.ecr.eu-central-2.amazonaws.com"
+ecr_project:  "patientsync-prod"
+
+# Image-Tag — wird beim Aufruf überschrieben: -e image_tag=1.2.3
+# Standardmässig wird 'latest' verwendet.
+image_tag: "latest"
+
+# Image-Namen (werden automatisch zusammengesetzt)
+images:
+  backend_api:    "{{ ecr_registry }}/{{ ecr_project }}-backend-api:{{ image_tag }}"
+  billing_api:    "{{ ecr_registry }}/{{ ecr_project }}-billing-api:{{ image_tag }}"
+  ai_service:     "{{ ecr_registry }}/{{ ecr_project }}-ai-service:{{ image_tag }}"
+  login_gateway:  "{{ ecr_registry }}/{{ ecr_project }}-login-gateway:{{ image_tag }}"
+
+# ── Verzeichnisse auf EC2 ─────────────────────────────────────────────────────
+app_dir:      /opt/patientsync
+env_dir:      /etc/patientsync
+data_dir:     /data/patientsync
+log_dir:      /var/log/patientsync
+
+# ── Port-Konfiguration ────────────────────────────────────────────────────────
+ports:
+  nginx:          80
+  backend_api:    5000
+  billing_api:    8090
+  ai_service:     8088
+  login_gateway:  8080
+
+# ── AWS ───────────────────────────────────────────────────────────────────────
+aws_region: "eu-central-2"
+
+# SSM Parameter Store Pfade (für automatisches Secret-Pulling)
+ssm_prefix:       "/patientsync/prod"
+ssm_rds_prefix:   "/patientsync/prod/data/rds"
+
+# ── App-Konfiguration (nicht-sensitiv) ───────────────────────────────────────
+app_env:          "production"
+node_env:         "production"
+aws_region_app:   "eu-central-2"
+default_tenant_id: "dhpatientsync"
+documents_bucket: "patientsync-prod-documents-eu-central-2"
+
+# DB-Konfiguration (Werte kommen aus Secrets Manager via SSM, hier nur Defaults)
+db_port:          "5432"
+db_name:          "patientsync"
+db_user:          "patientsync_app"
+db_sslmode:       "verify-full"
+
+# Session / Cookie
+session_cookie_name:     "session"
+session_cookie_secure:   "true"
+session_cookie_samesite: "lax"
+
+# CORS / Domains — beim Deploy überschreiben: -e cloudfront_domain=xyz.cloudfront.net
+cloudfront_domain: "your-cloudfront-domain.cloudfront.net"
+api_domain:        "api.doktorhausag-faellanden.ch"
+
+# ── Docker Compose Restart-Policy ────────────────────────────────────────────
+docker_restart_policy: "unless-stopped"

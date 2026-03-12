@@ -1,0 +1,84 @@
+# docker-compose.yml — patientsync
+# Managed by Ansible — nicht manuell bearbeiten.
+# Alle Container laufen im host-network: kommunizieren via 127.0.0.1
+
+services:
+
+  backend-api:
+    image: "{{ images.backend_api }}"
+    container_name: patientsync-backend-api
+    restart: "{{ docker_restart_policy }}"
+    network_mode: host
+    env_file:
+      - "{{ env_dir }}/backend-api.env"
+    volumes:
+      - "{{ data_dir }}/tenants:/data/tenants"
+      - "{{ log_dir }}:/var/log/patientsync"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:{{ ports.backend_api }}/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+  login-gateway:
+    image: "{{ images.login_gateway }}"
+    container_name: patientsync-login-gateway
+    restart: "{{ docker_restart_policy }}"
+    network_mode: host
+    env_file:
+      - "{{ env_dir }}/login-gateway.env"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:{{ ports.login_gateway }}/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "3"
+
+  billing-api:
+    image: "{{ images.billing_api }}"
+    container_name: patientsync-billing-api
+    restart: "{{ docker_restart_policy }}"
+    network_mode: host
+    env_file:
+      - "{{ env_dir }}/billing-api.env"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:{{ ports.billing_api }}/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "3"
+
+  ai-service:
+    image: "{{ images.ai_service }}"
+    container_name: patientsync-ai-service
+    restart: "{{ docker_restart_policy }}"
+    network_mode: host
+    env_file:
+      - "{{ env_dir }}/ai-service.env"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:{{ ports.ai_service }}/health"]
+      interval: 60s
+      timeout: 10s
+      retries: 2
+      start_period: 20s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "3"
