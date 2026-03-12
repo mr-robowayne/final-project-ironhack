@@ -13,9 +13,13 @@
   changed_when: false
 
 - name: System-Pakete aktualisieren
-  ansible.builtin.apt:
-    update_cache: true
-    cache_valid_time: 3600
+  ansible.builtin.shell: DEBIAN_FRONTEND=noninteractive apt-get update 2>&1
+  register: apt_update_result
+  changed_when: false
+
+- name: apt update Ergebnis anzeigen
+  ansible.builtin.debug:
+    msg: "{{ apt_update_result.stdout_lines }}"
 
 - name: Abhängigkeiten installieren
   ansible.builtin.apt:
