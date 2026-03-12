@@ -27,6 +27,7 @@ on:
       - development
     paths:
       - 'app/dhapp/backend/**'
+      - 'ansible/**'
       - '.github/workflows/backend-build.yml'
   pull_request:
     branches:
@@ -34,6 +35,7 @@ on:
       - development
     paths:
       - 'app/dhapp/backend/**'
+      - 'ansible/**'
       - '.github/workflows/backend-build.yml'
   workflow_dispatch:
     inputs:
