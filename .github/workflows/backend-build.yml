@@ -185,7 +185,7 @@ jobs:
           context:   app/dhapp/backend/api
           file:      app/dhapp/backend/api/Dockerfile
           platforms: linux/amd64
-          push:      ${{ github.event_name == 'push' }}
+          push:      ${{ github.event_name != 'pull_request' }}
           load:      ${{ github.event_name == 'pull_request' }}
           tags: |
             ${{ env.ECR_REGISTRY }}/${{ env.ECR_PROJECT }}-backend-api:${{ steps.tag.outputs.tag }}
@@ -197,7 +197,7 @@ jobs:
           context:   app/dhapp/backend/billing-service
           file:      app/dhapp/backend/billing-service/Dockerfile
           platforms: linux/amd64
-          push:      ${{ github.event_name == 'push' }}
+          push:      ${{ github.event_name != 'pull_request' }}
           load:      ${{ github.event_name == 'pull_request' }}
           tags: |
             ${{ env.ECR_REGISTRY }}/${{ env.ECR_PROJECT }}-billing-api:${{ steps.tag.outputs.tag }}
@@ -209,7 +209,7 @@ jobs:
           context:   app/dhapp/backend/ai-service
           file:      app/dhapp/backend/ai-service/Dockerfile
           platforms: linux/amd64
-          push:      ${{ github.event_name == 'push' }}
+          push:      ${{ github.event_name != 'pull_request' }}
           load:      ${{ github.event_name == 'pull_request' }}
           tags: |
             ${{ env.ECR_REGISTRY }}/${{ env.ECR_PROJECT }}-ai-service:${{ steps.tag.outputs.tag }}
@@ -221,14 +221,14 @@ jobs:
           context:   app/dhapp/backend/login-gateway
           file:      app/dhapp/backend/login-gateway/Dockerfile
           platforms: linux/amd64
-          push:      ${{ github.event_name == 'push' }}
+          push:      ${{ github.event_name != 'pull_request' }}
           load:      ${{ github.event_name == 'pull_request' }}
           tags: |
             ${{ env.ECR_REGISTRY }}/${{ env.ECR_PROJECT }}-login-gateway:${{ steps.tag.outputs.tag }}
             ${{ env.ECR_REGISTRY }}/${{ env.ECR_PROJECT }}-login-gateway:latest
 
       - name: Trivy Image-Scans
-        if: github.event_name == 'push'
+        if: github.event_name != 'pull_request'
         run: |
           for service in backend-api billing-api ai-service login-gateway; do
             echo "── Scanning $service ──"
