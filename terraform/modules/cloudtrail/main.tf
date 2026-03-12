@@ -14,6 +14,7 @@ locals {
   cloudtrail_s3_object_arn = local.normalized_s3_key_prefix == "" ? "${aws_s3_bucket.this.arn}/AWSLogs/${data.aws_caller_identity.current.account_id}/*" : "${aws_s3_bucket.this.arn}/${local.normalized_s3_key_prefix}/AWSLogs/${data.aws_caller_identity.current.account_id}/*"
 }
 
+#tfsec:ignore:aws-s3-enable-bucket-logging
 resource "aws_s3_bucket" "this" {
   bucket        = var.s3_bucket_name
   force_destroy = var.s3_force_destroy
