@@ -5,6 +5,21 @@
 # Läuft auf beiden EC2s gleichzeitig (Ansible parallele Execution).
 # =============================================================================
 
+# ── Verzeichnisse sicherstellen ───────────────────────────────────────────────
+
+- name: Verzeichnisse anlegen
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0750"
+  loop:
+    - "{{ env_dir }}"
+    - "{{ app_dir }}"
+    - "{{ data_dir }}"
+    - "{{ log_dir }}"
+
 # ── Env-Dateien deployen ──────────────────────────────────────────────────────
 
 - name: backend-api.env deployen
