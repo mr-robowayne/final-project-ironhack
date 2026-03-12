@@ -72,6 +72,12 @@
     docker login --username AWS --password-stdin {{ ecr_registry }}
   changed_when: true
 
+# ── Dangling Images + Build-Cache bereinigen (verhindert "no space left") ─────
+
+- name: Docker Dangling Images + Build-Cache bereinigen
+  ansible.builtin.shell: docker system prune -f --volumes 2>&1 || true
+  changed_when: true
+
 # ── Images pullen ─────────────────────────────────────────────────────────────
 
 - name: Alle Images pullen (linux/amd64)
