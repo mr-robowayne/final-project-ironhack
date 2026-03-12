@@ -69,6 +69,12 @@ jobs:
           npm install --prefix app/dhapp/backend/ai-service/app
           npm install --prefix app/dhapp/backend/billing-service/app
 
+      - name: npm audit fix (behebt transitive CVEs ohne Breaking Changes)
+        run: |
+          npm audit fix --prefix app/dhapp/backend/api/app || true
+          npm audit fix --prefix app/dhapp/backend/ai-service/app || true
+          npm audit fix --prefix app/dhapp/backend/billing-service/app || true
+
       - name: Trivy installieren
         run: curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
 

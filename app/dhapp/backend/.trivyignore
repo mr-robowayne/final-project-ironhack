@@ -3,3 +3,8 @@
 # Risk accepted: xlsx is used server-side only, not exposed to untrusted input
 CVE-2023-30533
 CVE-2024-22363
+
+# tar — transitive dependency (via puppeteer/nodemon)
+# Fix requires major version bump (6→7) which breaks indirect parent packages
+# npm audit fix --force not safe in production builds
+CVE-2024-28863
