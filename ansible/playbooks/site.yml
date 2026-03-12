@@ -20,6 +20,7 @@
   serial: 1          # Eine EC2 nach der anderen (Rolling Deploy, keine Downtime)
 
   vars_files:
+    - ../group_vars/all.yml
     - ../group_vars/vault.yml
 
   pre_tasks:
