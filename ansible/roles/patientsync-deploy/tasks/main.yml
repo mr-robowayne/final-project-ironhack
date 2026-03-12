@@ -100,6 +100,26 @@
     msg: "{{ compose_result.containers | map(attribute='Name') | list }}"
   when: compose_result.containers is defined
 
+# ── Container Status + Logs (Diagnose) ───────────────────────────────────────
+
+- name: Container Status prüfen (docker ps -a)
+  ansible.builtin.shell: docker ps -a --format "table {% raw %}{{.Names}}\t{{.Status}}\t{{.Ports}}{% endraw %}"
+  register: docker_ps_result
+  changed_when: false
+
+- name: Container Status anzeigen
+  ansible.builtin.debug:
+    msg: "{{ docker_ps_result.stdout_lines }}"
+
+- name: backend-api Logs (letzte 50 Zeilen)
+  ansible.builtin.shell: docker logs patientsync-backend-api --tail 50 2>&1 || true
+  register: backend_logs
+  changed_when: false
+
+- name: backend-api Logs anzeigen
+  ansible.builtin.debug:
+    msg: "{{ backend_logs.stdout_lines }}"
+
 # ── Healthchecks ──────────────────────────────────────────────────────────────
 
 - name: Warten bis backend-api antwortet
