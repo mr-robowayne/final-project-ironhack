@@ -19,6 +19,7 @@
   serial: 1          # Erst EC2-A, dann EC2-B → keine Downtime
 
   vars_files:
+    - ../group_vars/all.yml
     - ../group_vars/vault.yml
 
   pre_tasks:
