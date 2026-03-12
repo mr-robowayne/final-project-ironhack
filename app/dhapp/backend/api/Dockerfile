@@ -20,8 +20,8 @@ ENV BACKEND_PORT=5000
 ENV BIND_PUBLIC=true
 
 WORKDIR /app
-COPY app/package.json app/package-lock.json ./
-RUN npm ci --omit=dev --no-audit --no-fund
+COPY app/package*.json ./
+RUN npm install --omit=dev --no-audit --no-fund
 
 COPY app/ .
 RUN mkdir -p /data/tenants && chown -R node:node /app /data/tenants

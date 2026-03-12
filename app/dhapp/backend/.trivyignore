@@ -1,0 +1,15 @@
+# xlsx (SheetJS) — fix versions not available on public npm registry
+# SheetJS moved to commercial model, newer versions removed from npmjs.com
+# Risk accepted: xlsx is used server-side only, not exposed to untrusted input
+CVE-2023-30533
+CVE-2024-22363
+
+# tar — transitive dependency (via puppeteer/nodemon)
+# Fix requires major version bump (6→7) which breaks indirect parent packages
+# npm audit fix --force not safe in production builds; risk accepted
+CVE-2026-23745
+CVE-2026-23950
+CVE-2026-24842
+CVE-2026-26960
+CVE-2026-29786
+CVE-2026-31802
