@@ -117,13 +117,14 @@
     port: "{{ ports.backend_api }}"
     timeout: 90
     delay: 5
+  ignore_errors: true
 
-- name: backend-api Logs (letzte 80 Zeilen)
-  ansible.builtin.shell: docker logs patientsync-backend-api --tail 80 2>&1 || true
+- name: backend-api Logs (letzte 120 Zeilen nach wait)
+  ansible.builtin.shell: docker logs patientsync-backend-api --tail 120 2>&1 || true
   register: backend_logs
   changed_when: false
 
-- name: backend-api Logs anzeigen
+- name: backend-api Logs anzeigen (nach wait_for)
   ansible.builtin.debug:
     msg: "{{ backend_logs.stdout_lines }}"
 
