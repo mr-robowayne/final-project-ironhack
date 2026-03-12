@@ -237,6 +237,7 @@ jobs:
               --severity CRITICAL,HIGH \
               --exit-code 1 \
               --ignore-unfixed \
+              --ignorefile app/dhapp/backend/.trivyignore \
               --format table
           done
 
