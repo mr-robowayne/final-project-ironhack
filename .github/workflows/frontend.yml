@@ -60,6 +60,6 @@ jobs:
         run: |
           echo "🚀 Deploying to Production..."
           # Skript ausführbar machen
-          chmod +x scripts/deploy-s3frontend.sh
+          chmod +x scripts/aws/deploy-s3frontend.sh
           # Deploy Skript aufrufen
-          ./scripts/deploy-s3frontend.sh "$BUCKET_NAME" "$CF_DIST_ID"
+          ./scripts/aws/deploy-s3frontend.sh "$BUCKET_NAME" "$CF_DIST_ID"
