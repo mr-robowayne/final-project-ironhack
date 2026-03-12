@@ -111,14 +111,32 @@
   ansible.builtin.debug:
     msg: "{{ docker_ps_result.stdout_lines }}"
 
-- name: backend-api Logs (letzte 50 Zeilen)
-  ansible.builtin.shell: docker logs patientsync-backend-api --tail 50 2>&1 || true
+- name: Warten bis port {{ ports.backend_api }} offen ist (TCP)
+  ansible.builtin.wait_for:
+    host: 127.0.0.1
+    port: "{{ ports.backend_api }}"
+    timeout: 90
+    delay: 5
+
+- name: backend-api Logs (letzte 80 Zeilen)
+  ansible.builtin.shell: docker logs patientsync-backend-api --tail 80 2>&1 || true
   register: backend_logs
   changed_when: false
 
 - name: backend-api Logs anzeigen
   ansible.builtin.debug:
     msg: "{{ backend_logs.stdout_lines }}"
+
+- name: backend-api Health direkt testen (Debug)
+  ansible.builtin.shell: >
+    curl -sv -H 'x-forwarded-proto: https'
+    http://127.0.0.1:{{ ports.backend_api }}/api/health 2>&1 || true
+  register: curl_health
+  changed_when: false
+
+- name: backend-api Health Ergebnis anzeigen
+  ansible.builtin.debug:
+    msg: "{{ curl_health.stdout_lines }}"
 
 # ── Healthchecks ──────────────────────────────────────────────────────────────
 
