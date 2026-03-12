@@ -156,6 +156,7 @@ if [[ -d "$FRONTEND_DIR/static" ]]; then
   aws s3 sync "$FRONTEND_DIR/static" "s3://$S3_BUCKET/static" \
     --delete \
     --exclude "*.map" \
+    --sse AES256 \
     --cache-control "public,max-age=31536000,immutable"
 fi
 
@@ -164,12 +165,14 @@ aws s3 sync "$FRONTEND_DIR" "s3://$S3_BUCKET" \
   --exclude "static/*" \
   --exclude "*.map" \
   --exclude "BUILD_INFO.txt" \
+  --sse AES256 \
   --cache-control "no-cache,no-store,must-revalidate"
 
 # Expliziter Upload von Entry-Points (Sicherstellen, dass Cache-Control stimmt)
 for f in index.html manifest.json asset-manifest.json; do
   if [[ -f "$FRONTEND_DIR/$f" ]]; then
     aws s3 cp "$FRONTEND_DIR/$f" "s3://$S3_BUCKET/$f" \
+      --sse AES256 \
       --cache-control "no-cache,no-store,must-revalidate"
   fi
 done

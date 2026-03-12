@@ -321,6 +321,7 @@ jobs:
             aws s3 sync app/dhapp/frontend/static "s3://$BUCKET_NAME/static" \
               --delete \
               --exclude "*.map" \
+              --sse AES256 \
               --cache-control "public,max-age=31536000,immutable"
           fi
 
@@ -331,12 +332,14 @@ jobs:
             --exclude "*.map" \
             --exclude "BUILD_INFO.txt" \
             --exclude "node_modules/*" \
+            --sse AES256 \
             --cache-control "no-cache,no-store,must-revalidate"
 
           # Ensure entry points have correct cache headers
           for f in index.html manifest.json asset-manifest.json; do
             if [[ -f "app/dhapp/frontend/$f" ]]; then
               aws s3 cp "app/dhapp/frontend/$f" "s3://$BUCKET_NAME/$f" \
+                --sse AES256 \
                 --cache-control "no-cache,no-store,must-revalidate"
             fi
           done
