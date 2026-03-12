@@ -271,6 +271,12 @@ jobs:
             -o /tmp/ssm-plugin.deb
           sudo dpkg -i /tmp/ssm-plugin.deb
 
+      - name: SSH-Key für EC2-Zugriff einrichten
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.EC2_SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+
       - name: Ansible Vault Passwort schreiben
         run: echo "${{ secrets.ANSIBLE_VAULT_PASS }}" > /tmp/vault_pass
         # Wird am Ende des Jobs automatisch gelöscht (runner ist ephemeral)
