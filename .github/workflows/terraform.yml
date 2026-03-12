@@ -154,6 +154,10 @@ jobs:
         run: terraform fmt -check -recursive
         working-directory: terraform/deploy-aws
 
+      # Install TFLint
+      - name: Setup TFLint
+        uses: terraform-linters/setup-tflint@v4
+
       # Run TFLint
       - name: Run TFLint
         run: tflint
