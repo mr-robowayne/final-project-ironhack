@@ -12,14 +12,23 @@
     done
   changed_when: false
 
-- name: System-Pakete aktualisieren
-  ansible.builtin.shell: DEBIAN_FRONTEND=noninteractive apt-get update 2>&1
-  register: apt_update_result
-  changed_when: false
+- name: apt auf IPv4 + HTTPS umstellen (SG erlaubt nur 443 outbound, kein IPv6 Egress)
+  ansible.builtin.copy:
+    dest: /etc/apt/apt.conf.d/99patientsync
+    content: |
+      Acquire::ForceIPv4 "true";
+    mode: "0644"
 
-- name: apt update Ergebnis anzeigen
-  ansible.builtin.debug:
-    msg: "{{ apt_update_result.stdout_lines }}"
+- name: apt sources auf HTTPS umstellen
+  ansible.builtin.replace:
+    path: /etc/apt/sources.list
+    regexp: 'http://'
+    replace: 'https://'
+
+- name: System-Pakete aktualisieren
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
 
 - name: Abhängigkeiten installieren
   ansible.builtin.apt:
