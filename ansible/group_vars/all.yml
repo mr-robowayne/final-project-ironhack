@@ -49,7 +49,7 @@ documents_bucket: "patientsync-prod-documents-eu-central-2"
 # DB-Konfiguration (Werte kommen aus Secrets Manager via SSM, hier nur Defaults)
 db_port:          "5432"
 db_name:          "patientsync"
-db_user:          "patientsync_app"
+db_user:          "patientsync_admin"
 db_sslmode:       "verify-full"
 
 # Session / Cookie
@@ -63,3 +63,12 @@ api_domain:        "api.doktorhausag-faellanden.ch"
 
 # ── Docker Compose Restart-Policy ────────────────────────────────────────────
 docker_restart_policy: "unless-stopped"
+
+# ── Ansible Connection (AWS SSM — kein SSH-Key nötig, DSGVO/ISO-konform) ─────
+# Verwendet AWS SSM SendCommand statt SSH. Authentifizierung ausschliesslich
+# über IAM/OIDC-Rollen — keine gespeicherten Credentials.
+ansible_connection:              community.aws.aws_ssm
+ansible_aws_ssm_region:          "eu-central-2"
+ansible_aws_ssm_bucket_name:     "patientsync-prod-tfstate"
+ansible_aws_ssm_bucket_key_prefix: "ansible-ssm-tmp"
+ansible_aws_ssm_timeout:         600

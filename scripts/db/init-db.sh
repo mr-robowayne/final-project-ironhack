@@ -63,6 +63,50 @@ PYEOF
 success "Flyway-User konfiguriert."
 
 # -------------------------------------------------------
+# App-User erstellen (patientsync_app)
+# -------------------------------------------------------
+header "App-DB-User konfigurieren (patientsync_app)"
+echo ""
+info "Dies ist das DB_PASSWORD aus dem Ansible Vault (vault_db_password)."
+read -rsp "App-User-Passwort (patientsync_app): " APP_PASS
+echo ""
+[ -z "$APP_PASS" ] && { error "Passwort darf nicht leer sein."; exit 1; }
+
+python3 - << PYEOF
+import os, subprocess, pathlib, sys
+
+pw = """${APP_PASS}""".replace("'", "''")
+sql = f"""
+DO \$body\$
+BEGIN
+  IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'patientsync_app') THEN
+    CREATE USER patientsync_app WITH PASSWORD '{pw}';
+    RAISE NOTICE 'App-User erstellt.';
+  ELSE
+    ALTER USER patientsync_app WITH PASSWORD '{pw}';
+    RAISE NOTICE 'App-User Passwort aktualisiert.';
+  END IF;
+END\$body\$;
+GRANT CONNECT ON DATABASE patientsync TO patientsync_app;
+GRANT CREATE ON DATABASE patientsync TO patientsync_app;
+GRANT ALL ON SCHEMA public TO patientsync_app;
+GRANT ALL ON ALL TABLES IN SCHEMA public TO patientsync_app;
+GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO patientsync_app;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO patientsync_app;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO patientsync_app;
+"""
+f = pathlib.Path('/tmp/ps_app_user.sql')
+f.write_text(sql)
+r = subprocess.run(['psql', '${DB_CONN_STRING}', '--no-psqlrc', '-f', str(f)], capture_output=True, text=True)
+f.unlink(missing_ok=True)
+print(r.stdout)
+if r.returncode != 0:
+    print(r.stderr, file=sys.stderr); sys.exit(r.returncode)
+PYEOF
+
+success "App-User patientsync_app konfiguriert."
+
+# -------------------------------------------------------
 # Flyway Config schreiben
 # -------------------------------------------------------
 python3 - << PYEOF
