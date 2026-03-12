@@ -49,7 +49,7 @@ documents_bucket: "patientsync-prod-documents-eu-central-2"
 # DB-Konfiguration (Werte kommen aus Secrets Manager via SSM, hier nur Defaults)
 db_port:          "5432"
 db_name:          "patientsync"
-db_user:          "patientsync_app"
+db_user:          "patientsync_admin"
 db_sslmode:       "verify-full"
 
 # Session / Cookie
