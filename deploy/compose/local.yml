@@ -1,0 +1,6 @@
+services:
+  frontend:
+    build:
+      context: ../../app/dhapp/frontend
+      dockerfile: Dockerfile
+    image: compose-frontend

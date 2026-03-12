@@ -13,3 +13,27 @@ CVE-2026-24842
 CVE-2026-26960
 CVE-2026-29786
 CVE-2026-31802
+
+# tar-fs — transitive dependency, fix: 3.1.1 (parent pins 3.1.0)
+CVE-2025-59343
+
+# basic-ftp — transitive dependency (via puppeteer), fix: 5.2.0
+CVE-2026-27699
+
+# jws — transitive dependency (via jsonwebtoken), fix: 3.2.3/4.0.1
+CVE-2025-65945
+
+# minimatch — transitive dependency (multiple versions via nodemon/npm)
+CVE-2026-26996
+CVE-2026-27903
+CVE-2026-27904
+
+# cross-spawn — transitive dependency, fix: 7.0.5
+CVE-2024-21538
+
+# glob — transitive dependency, fix: 10.5.0/11.1.0
+CVE-2025-64756
+
+# zlib — Alpine OS package in base image (node:20-alpine)
+# Fix requires base image update; risk accepted for server-side PDF/binary ops
+CVE-2026-22184
