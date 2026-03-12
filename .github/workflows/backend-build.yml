@@ -265,17 +265,7 @@ jobs:
       - name: Python + Ansible + SSM Plugin installieren
         run: |
           pip install --quiet ansible boto3 botocore
-          ansible-galaxy collection install amazon.aws community.docker
-          # AWS Session Manager Plugin (für SSM-Verbindung zu EC2s)
-          curl -fsSL "https://s3.amazonaws.com/session-manager-downloads/plugin/latest/ubuntu_64bit/session-manager-plugin.deb" \
-            -o /tmp/ssm-plugin.deb
-          sudo dpkg -i /tmp/ssm-plugin.deb
-
-      - name: SSH-Key für EC2-Zugriff einrichten
-        run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.EC2_SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
-          chmod 600 ~/.ssh/id_ed25519
+          ansible-galaxy collection install amazon.aws community.aws community.docker
 
       - name: Ansible Vault Passwort schreiben
         run: echo "${{ secrets.ANSIBLE_VAULT_PASS }}" > /tmp/vault_pass
