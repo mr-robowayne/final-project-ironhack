@@ -4,6 +4,14 @@
 # Installiert Docker Engine + Docker Compose Plugin auf Ubuntu 22.04
 # =============================================================================
 
+- name: Auf apt-Lock warten (unattended-upgrades beim EC2-Start)
+  ansible.builtin.shell: |
+    systemctl stop unattended-upgrades || true
+    while fuser /var/lib/dpkg/lock-frontend /var/lib/apt/lists/lock /var/cache/apt/archives/lock >/dev/null 2>&1; do
+      sleep 3
+    done
+  changed_when: false
+
 - name: System-Pakete aktualisieren
   ansible.builtin.apt:
     update_cache: true
