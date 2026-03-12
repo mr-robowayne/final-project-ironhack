@@ -1,0 +1,298 @@
+name: Backend CI/CD
+
+# =============================================================================
+# Branching-Strategie:
+#
+#   development branch / PR → development:
+#     1. quality   — Trivy Filesystem-Scan
+#     2. build-dev — Docker Build-Test (kein Push, kein Deploy)
+#
+#   main branch / PR → main:
+#     1. quality    — Trivy Filesystem-Scan
+#     2. build-prod — Build + Push ECR + Trivy Image-Scan
+#     3. deploy     — Ansible Rolling Deploy auf EC2s (nur bei Push, nicht PR)
+#
+# GitHub Secrets (Settings → Environments → production):
+#   AWS_ROLE_ARN       = arn:aws:iam::648786395667:role/patientsync-github-actions-role
+#   ANSIBLE_VAULT_PASS = Passwort von: ansible-vault encrypt group_vars/vault.yml
+#
+# GitHub Secrets (Settings → Environments → development):
+#   (keine zusätzlichen Secrets nötig)
+# =============================================================================
+
+on:
+  push:
+    branches:
+      - main
+      - development
+    paths:
+      - 'app/dhapp/backend/**'
+      - '.github/workflows/backend-build.yml'
+  pull_request:
+    branches:
+      - main
+      - development
+    paths:
+      - 'app/dhapp/backend/**'
+      - '.github/workflows/backend-build.yml'
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: 'Image Tag (z.B. 1.2.3) — leer = git short SHA'
+        required: false
+        default: ''
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION:   eu-central-2
+  ECR_REGISTRY: 648786395667.dkr.ecr.eu-central-2.amazonaws.com
+  ECR_PROJECT:  patientsync-prod
+
+# =============================================================================
+# JOB 1: Code-Qualität — läuft auf BEIDEN Branches
+# =============================================================================
+jobs:
+  quality:
+    name: Code-Qualität (Trivy)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Trivy Filesystem-Scan
+        uses: aquasecurity/trivy-action@0.30.0
+        with:
+          scan-type:      fs
+          scan-ref:       app/dhapp/backend
+          severity:       CRITICAL,HIGH
+          exit-code:      1
+          ignore-unfixed: true
+          format:         table
+
+# =============================================================================
+# JOB 2a: Build-Test — nur DEVELOPMENT
+# Baut alle Images lokal (kein Push, kein Deploy)
+# =============================================================================
+  build-dev:
+    name: Build-Test (Development)
+    runs-on: ubuntu-latest
+    needs: quality
+    if: github.ref == 'refs/heads/development' || (github.event_name == 'pull_request' && github.base_ref == 'development')
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build backend-api
+        uses: docker/build-push-action@v5
+        with:
+          context:   app/dhapp/backend/api
+          file:      app/dhapp/backend/api/Dockerfile
+          platforms: linux/amd64
+          push:      false
+
+      - name: Build billing-api
+        uses: docker/build-push-action@v5
+        with:
+          context:   app/dhapp/backend/billing-service
+          file:      app/dhapp/backend/billing-service/Dockerfile
+          platforms: linux/amd64
+          push:      false
+
+      - name: Build ai-service
+        uses: docker/build-push-action@v5
+        with:
+          context:   app/dhapp/backend/ai-service
+          file:      app/dhapp/backend/ai-service/Dockerfile
+          platforms: linux/amd64
+          push:      false
+
+      - name: Build login-gateway
+        uses: docker/build-push-action@v5
+        with:
+          context:   app/dhapp/backend/login-gateway
+          file:      app/dhapp/backend/login-gateway/Dockerfile
+          platforms: linux/amd64
+          push:      false
+
+# =============================================================================
+# JOB 2b: Build + Push + Trivy Image-Scan — nur MAIN
+# =============================================================================
+  build-prod:
+    name: Build & Push (Production)
+    runs-on: ubuntu-latest
+    needs: quality
+    if: github.ref == 'refs/heads/main' || (github.event_name == 'pull_request' && github.base_ref == 'main')
+    environment: production
+
+    outputs:
+      image_tag: ${{ steps.tag.outputs.tag }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Image Tag auflösen
+        id: tag
+        run: |
+          INPUT="${{ github.event.inputs.image_tag }}"
+          if [ -n "$INPUT" ]; then
+            echo "tag=$INPUT" >> $GITHUB_OUTPUT
+          else
+            echo "tag=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Configure AWS Credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region:     ${{ env.AWS_REGION }}
+
+      - name: ECR Login
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Bei PR: nur Build (kein Push) — bei Push auf main: Build + Push
+      - name: Build & Push backend-api
+        uses: docker/build-push-action@v5
+        with:
+          context:   app/dhapp/backend/api
+          file:      app/dhapp/backend/api/Dockerfile
+          platforms: linux/amd64
+          push:      ${{ github.event_name == 'push' }}
+          load:      ${{ github.event_name == 'pull_request' }}
+          tags: |
+            ${{ env.ECR_REGISTRY }}/${{ env.ECR_PROJECT }}-backend-api:${{ steps.tag.outputs.tag }}
+            ${{ env.ECR_REGISTRY }}/${{ env.ECR_PROJECT }}-backend-api:latest
+
+      - name: Build & Push billing-api
+        uses: docker/build-push-action@v5
+        with:
+          context:   app/dhapp/backend/billing-service
+          file:      app/dhapp/backend/billing-service/Dockerfile
+          platforms: linux/amd64
+          push:      ${{ github.event_name == 'push' }}
+          load:      ${{ github.event_name == 'pull_request' }}
+          tags: |
+            ${{ env.ECR_REGISTRY }}/${{ env.ECR_PROJECT }}-billing-api:${{ steps.tag.outputs.tag }}
+            ${{ env.ECR_REGISTRY }}/${{ env.ECR_PROJECT }}-billing-api:latest
+
+      - name: Build & Push ai-service
+        uses: docker/build-push-action@v5
+        with:
+          context:   app/dhapp/backend/ai-service
+          file:      app/dhapp/backend/ai-service/Dockerfile
+          platforms: linux/amd64
+          push:      ${{ github.event_name == 'push' }}
+          load:      ${{ github.event_name == 'pull_request' }}
+          tags: |
+            ${{ env.ECR_REGISTRY }}/${{ env.ECR_PROJECT }}-ai-service:${{ steps.tag.outputs.tag }}
+            ${{ env.ECR_REGISTRY }}/${{ env.ECR_PROJECT }}-ai-service:latest
+
+      - name: Build & Push login-gateway
+        uses: docker/build-push-action@v5
+        with:
+          context:   app/dhapp/backend/login-gateway
+          file:      app/dhapp/backend/login-gateway/Dockerfile
+          platforms: linux/amd64
+          push:      ${{ github.event_name == 'push' }}
+          load:      ${{ github.event_name == 'pull_request' }}
+          tags: |
+            ${{ env.ECR_REGISTRY }}/${{ env.ECR_PROJECT }}-login-gateway:${{ steps.tag.outputs.tag }}
+            ${{ env.ECR_REGISTRY }}/${{ env.ECR_PROJECT }}-login-gateway:latest
+
+      - name: Trivy Image-Scan — backend-api
+        if: github.event_name == 'push'
+        uses: aquasecurity/trivy-action@0.30.0
+        with:
+          image-ref:      ${{ env.ECR_REGISTRY }}/${{ env.ECR_PROJECT }}-backend-api:${{ steps.tag.outputs.tag }}
+          severity:       CRITICAL,HIGH
+          exit-code:      1
+          ignore-unfixed: true
+          format:         table
+
+      - name: Trivy Image-Scan — billing-api
+        if: github.event_name == 'push'
+        uses: aquasecurity/trivy-action@0.30.0
+        with:
+          image-ref:      ${{ env.ECR_REGISTRY }}/${{ env.ECR_PROJECT }}-billing-api:${{ steps.tag.outputs.tag }}
+          severity:       CRITICAL,HIGH
+          exit-code:      1
+          ignore-unfixed: true
+          format:         table
+
+      - name: Trivy Image-Scan — ai-service
+        if: github.event_name == 'push'
+        uses: aquasecurity/trivy-action@0.30.0
+        with:
+          image-ref:      ${{ env.ECR_REGISTRY }}/${{ env.ECR_PROJECT }}-ai-service:${{ steps.tag.outputs.tag }}
+          severity:       CRITICAL,HIGH
+          exit-code:      1
+          ignore-unfixed: true
+          format:         table
+
+      - name: Trivy Image-Scan — login-gateway
+        if: github.event_name == 'push'
+        uses: aquasecurity/trivy-action@0.30.0
+        with:
+          image-ref:      ${{ env.ECR_REGISTRY }}/${{ env.ECR_PROJECT }}-login-gateway:${{ steps.tag.outputs.tag }}
+          severity:       CRITICAL,HIGH
+          exit-code:      1
+          ignore-unfixed: true
+          format:         table
+
+# =============================================================================
+# JOB 3: Ansible Rolling Deploy — nur MAIN, nur bei Push (nicht PR)
+# Läuft erst wenn build-prod erfolgreich abgeschlossen ist
+# =============================================================================
+  deploy:
+    name: Deploy auf EC2 (Ansible)
+    runs-on: ubuntu-latest
+    needs: build-prod
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    environment: production
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region:     ${{ env.AWS_REGION }}
+
+      - name: Python + Ansible + SSM Plugin installieren
+        run: |
+          pip install --quiet ansible boto3 botocore
+          ansible-galaxy collection install amazon.aws community.docker --quiet
+          # AWS Session Manager Plugin (für SSM-Verbindung zu EC2s)
+          curl -fsSL "https://s3.amazonaws.com/session-manager-downloads/plugin/latest/ubuntu_64bit/session-manager-plugin.deb" \
+            -o /tmp/ssm-plugin.deb
+          sudo dpkg -i /tmp/ssm-plugin.deb
+
+      - name: Ansible Vault Passwort schreiben
+        run: echo "${{ secrets.ANSIBLE_VAULT_PASS }}" > /tmp/vault_pass
+        # Wird am Ende des Jobs automatisch gelöscht (runner ist ephemeral)
+
+      - name: Ansible Rolling Deploy
+        working-directory: ansible
+        env:
+          ANSIBLE_HOST_KEY_CHECKING: "False"
+        run: |
+          ansible-playbook playbooks/deploy.yml \
+            --vault-password-file /tmp/vault_pass \
+            -e image_tag=${{ needs.build-prod.outputs.image_tag }}
+
+      - name: Vault Passwort löschen
+        if: always()
+        run: rm -f /tmp/vault_pass

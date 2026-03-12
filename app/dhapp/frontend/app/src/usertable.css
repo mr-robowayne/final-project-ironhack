@@ -1,0 +1,275 @@
+.logo-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  background-color: transparent;
+  padding: 20px 0;
+  z-index: 10;
+}
+
+.logo {
+  width: 120px;
+  height: auto;
+  z-index: 2;
+  position: relative;
+}
+
+/* Herzschlag-Linien */
+.heartbeat-left,
+.heartbeat-right {
+  width: 200px;
+  height: 30px;
+  position: relative;
+  z-index: 1;
+  overflow: hidden;
+}
+
+.heartbeat-left {
+  margin-right: 20px;
+  animation: heartbeatMoveLeft 2s infinite linear;
+}
+
+.heartbeat-left svg {
+  transform: scaleX(-1); /* Spiegelung */
+}
+
+.heartbeat-right {
+  margin-left: 20px;
+  animation: heartbeatMoveRight 2s infinite linear;
+}
+
+.heartbeat-path {
+  fill: none;
+  stroke: #00d1b2; /* Türkisgrün */
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  stroke-dasharray: 200;
+  stroke-dashoffset: 200;
+  animation: dashAnim 2s infinite ease-in-out;
+}
+
+/* Animationen */
+@keyframes dashAnim {
+  0% {
+    stroke-dashoffset: 200;
+  }
+  50% {
+    stroke-dashoffset: 100;
+  }
+  100% {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes heartbeatMoveLeft {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(10px);
+  }
+}
+
+@keyframes heartbeatMoveRight {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-10px);
+  }
+}
+
+
+/* Desktop-Standard */
+.desktop-only {
+    display: block;
+  }
+  .mobile-only {
+    display: none;
+  }
+  
+  /* Wrapper & Suche */
+  .responsive-patient-wrapper {
+    padding: 1rem;
+  }
+  
+  .responsive-search-container {
+    margin-bottom: 1rem;
+    display: flex;
+    justify-content: center;
+  }
+  
+  .responsive-search-input {
+    width: 100%;
+    max-width: 500px;
+    padding: 0.6rem 1rem;
+    font-size: 1rem;
+    border-radius: 8px;
+    border: 1px solid #ccc;
+  }
+  
+  /* Tabelle */
+  .responsive-table-wrapper {
+    overflow-x: auto;
+  }
+  
+  .responsive-patient-table {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 600px;
+  }
+  
+  .responsive-patient-table th,
+  .responsive-patient-table td {
+    padding: 0.75rem;
+    border-bottom: 1px solid #ddd;
+  }
+  
+  .responsive-table-row:hover {
+    background-color: #e6f7ff;
+    cursor: pointer;
+  }
+  
+  /* Karten-Ansicht für Mobile */
+  .patient-card {
+    background-color: #f8f8f8;
+    margin-bottom: 1rem;
+    padding: 1rem;
+    border-radius: 10px;
+    box-shadow: 0 0 6px rgba(0, 0, 0, 0.05);
+    transition: transform 0.2s;
+  }
+  .patient-card:hover {
+    transform: scale(1.01);
+    background-color: #eef9ff;
+    cursor: pointer;
+  }
+  
+  /* Mobile Breakpoint */
+  @media (max-width: 768px) {
+    .desktop-only {
+      display: none;
+    }
+    .mobile-only {
+      display: block;
+    }
+  
+    .responsive-search-input {
+      font-size: 0.9rem;
+    }
+  
+    .responsive-patient-wrapper {
+      padding: 0.5rem;
+    }
+  }
+
+  /* =============== HEADER STYLES =============== */
+.top-header {
+    background: rgba(255, 255, 255, 0.6);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    padding: 1rem 1.5rem;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.05);
+    position: sticky;
+    top: 0;
+    z-index: 200;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 0 0 20px 20px;
+  
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  
+ 
+
+
+  /* =============== NAVIGATION TABS =============== */
+.tab-nav {
+    display: flex;
+    justify-content: center;         /* Zentriert horizontal */
+    align-items: center;
+    flex-wrap: wrap;                 /* Umbruch bei Bedarf */
+    gap: 1rem;
+    max-width: 90%;                  /* Optional: Begrenzung für schönere Darstellung */
+    margin: 0 auto;                  /* Zentriert innerhalb des Elterncontainers */
+  }
+  
+  .tab-button {
+    background-color: rgba(255, 255, 255, 0.3);
+    border: none;
+    font-size: 1rem;
+    font-weight: 600;
+    color: #215680;
+    cursor: pointer;
+    padding: 0.5rem 1rem;
+    border-radius: 12px;
+    border-bottom: 2px solid transparent;
+    transition: all 0.3s ease;
+    backdrop-filter: blur(6px);
+  }
+
+  /* =============== WORKING TABS (SCROLLABLE) =============== */
+  .working-tabs {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    border-bottom: 1px solid #e5e7eb;
+    background: #f8fafc;
+    min-height: 40px;
+  }
+
+  .working-tabs-scroll {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1 1 auto;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch; /* smoother on iOS */
+    scroll-behavior: smooth;
+    padding-bottom: 2px; /* gives space for scrollbar */
+    /* keep items on one row */
+    flex-wrap: nowrap;
+  }
+
+  /* Subtle horizontal scrollbar styling */
+  .working-tabs-scroll::-webkit-scrollbar { height: 6px; }
+  .working-tabs-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 999px; }
+  .working-tabs-scroll::-webkit-scrollbar-track { background: transparent; }
+
+  .tab-button:hover,
+  .tab-button:focus {
+    border-color: #00b4b6;
+    background-color: rgba(0, 180, 182, 0.2);
+    color: #007b7f;
+  }
+  
+  /* =============== RESPONSIVE BREAKPOINTS =============== */
+  @media (max-width: 768px) {
+    .top-header {
+      flex-direction: column;
+      align-items: stretch;
+      padding: 0.8rem 1rem;
+      border-radius: 0 0 16px 16px;
+    }
+  
+    .tab-nav {
+      justify-content: center;       /* Zentriert auch auf kleinen Geräten */
+      flex-wrap: wrap;               /* Bricht bei Bedarf um */
+      gap: 0.5rem;
+      margin-top: 0.5rem;
+    }
+  
+    .tab-button {
+      width: auto;                   /* Nicht 100%, damit sie nebeneinander bleiben */
+      text-align: center;
+      font-size: 0.95rem;
+      padding: 0.6rem 1rem;
+    }
+  }
+  

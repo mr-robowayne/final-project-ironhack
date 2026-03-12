@@ -1,0 +1,70 @@
+Recommended in AWS SSM Parameter Store (backend, non-secret)
+Date: 2026-03-12
+
+Common (all services)
+- APP_ENV
+- NODE_ENV
+- BIND_PUBLIC
+- DB_HOST          (= RDS endpoint, from /patientsync/prod/data/rds/endpoint)
+- DB_PORT          (= 5432)
+- DB_NAME          (= patientsync)
+- DB_USER          (= patientsync_app)
+- DB_SSLMODE       (= verify-full)
+- DB_SSL_REJECT_UNAUTHORIZED
+- REQUIRE_DB_TLS_IN_PROD
+- ALLOW_INSECURE_DB_SSL
+
+backend-api
+- BACKEND_PORT
+- REQUIRE_AUTH
+- FORCE_HTTPS
+- EXPOSE_INTERNAL_ERRORS
+- DEFAULT_TENANT_ID     (= dhpatientsync)
+- DEFAULT_TENANTS       (= dhpatientsync)
+- TENANT_CONFIG_PATH
+- TENANT_STORAGE_BASE_PATH
+- TENANT_PROVISIONING_HOST
+- TENANT_PROVISIONING_PORT
+- TENANT_PROVISIONING_DATABASE
+- TENANT_PROVISIONING_USER
+- TENANT_PROVISIONING_SSLMODE
+- CORS_ORIGIN
+- CORS_ALLOWLIST
+- AI_SERVICE_URL        (= http://127.0.0.1:8088)
+- BILLING_SERVICE_URL   (= http://127.0.0.1:8090)
+- DOCUMENTS_BUCKET_NAME (= patientsync-prod-documents-eu-central-2)
+- AWS_REGION            (= eu-central-2)
+- ENABLE_XSD_VALIDATION
+- INVOICE_XSD_PATH
+- AUDIT_RETENTION_DAYS
+
+billing-api
+- PORT
+- DEFAULT_TENANT_ID     (= dhpatientsync)
+- TENANT_CONFIG_PATH
+
+ai-service
+- PORT
+- OPENAI_MODEL
+- OPENAI_TIMEOUT_MS
+- OPENAI_MAX_OUTPUT_TOKENS
+- OPENAI_REASONING_EFFORT
+
+login-gateway
+- LOGIN_PORT
+- PORT
+- TRUST_PROXY_HOPS
+- DEFAULT_TENANT_ID     (= dhpatientsync)
+- REQUIRE_TENANT_REGISTRY
+- DEFAULT_APP_REDIRECT_URL
+- TENANT_APP_REDIRECT_MAP
+- SESSION_COOKIE_NAME
+- SESSION_COOKIE_DOMAIN
+- SESSION_COOKIE_SECURE
+- SESSION_COOKIE_SAMESITE
+- CORS_ORIGIN
+
+Rule
+- Put only non-sensitive values in Parameter Store.
+- Sensitive values (JWT_SECRET, DB_PASSWORD, OPENAI_API_KEY, *_TOKEN) go to Secrets Manager.
+- No AWS_ACCESS_KEY_ID or AWS_SECRET_ACCESS_KEY — EC2 instance role provides S3/KMS access.

@@ -1,0 +1,181 @@
+/* Container: Vollflächig, transparenter Hintergrund */
+.loader-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    background-color: transparent;
+  }
+  
+  /* Spinner */
+  .apple-spinner {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    border: 8px solid rgba(0, 0, 0, 0.1);
+    border-top: 8px solid rgba(0, 0, 0, 0.7);
+    border-right: 8px solid rgba(0, 0, 0, 0.4);
+    border-bottom: 8px solid rgba(0, 0, 0, 0.2);
+    border-left: 8px solid rgba(0, 0, 0, 0.2);
+    box-sizing: border-box;
+    animation: apple-spin 1.2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+    box-shadow:
+      0 0 10px rgba(0, 0, 0, 0.1),
+      inset 0 0 10px rgba(0, 0, 0, 0.05);
+  }
+  
+  @keyframes apple-spin {
+    0% {
+      transform: rotate(0deg);
+    }
+    100% {
+      transform: rotate(360deg);
+    }
+  }
+  
+  /* Nur für Login-Seite */
+  .loginpage-wrapper {
+    height: 100vh;
+    background: linear-gradient(135deg, #ffffff9c, #3674a763);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    margin: 0;
+    padding: 0;
+  }
+  
+  .loginpage-outer-wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  
+  /* Logo + Herzschlag-SVG Container */
+  .loginpage-logo-wrapper {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 40px;
+    position: relative;
+    gap: 0;
+  }
+  
+  .loginpage-logo {
+    height: 80px;
+    z-index: 1;
+    margin: 0;
+  }
+  
+  .loginpage-heartbeat-left,
+  .loginpage-heartbeat-right {
+    width: 200px;
+    height: 30px;
+  }
+  
+  .loginpage-heartbeat-right {
+    margin-left: 8px; /* kleiner Abstand zum Logo */
+  }
+  
+  .loginpage-svg {
+    width: 100%;
+    height: 100%;
+  }
+  
+  .loginpage-heartbeat-path {
+    fill: none;
+    stroke: rgb(255, 177, 10);
+    stroke-width: 2;
+    animation: loginpage-heartbeat 4s infinite;
+  }
+  
+  @keyframes loginpage-heartbeat {
+    0%,
+    100% {
+      stroke-dasharray: 0, 500;
+    }
+    50% {
+      stroke-dasharray: 100, 500;
+    }
+  }
+  
+  /* Login-Formular Container */
+  .loginpage-form-container {
+    background: white;
+    padding: 40px;
+    border-radius: 16px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+    width: 100%;
+    max-width: 400px;
+    text-align: center;
+  }
+  
+  .loginpage-form-container h2 {
+    margin-bottom: 24px;
+    color: #333;
+    font-size: 28px;
+  }
+  
+  .loginpage-input {
+    width: 100%;
+    padding: 14px;
+    margin: 10px 0;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    font-size: 16px;
+    transition: all 0.3s ease;
+  }
+  
+  .loginpage-input:focus {
+    border-color: #00c9ff;
+    outline: none;
+    box-shadow: 0 0 8px rgba(0, 201, 255, 0.3);
+  }
+  
+  .loginpage-button {
+    width: 100%;
+    padding: 14px;
+    background-color: #00c9ff;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: bold;
+    cursor: pointer;
+    margin-top: 12px;
+    transition: background 0.3s ease;
+  }
+  
+  .loginpage-button:hover {
+    background-color: #00b1e0;
+  }
+  
+  .loginpage-error-message {
+    margin-top: 12px;
+    color: red;
+    font-size: 14px;
+  }
+
+  .loginpage-tenant-status {
+    margin-top: 6px;
+    font-size: 0.85rem;
+    text-align: left;
+    color: #555;
+  }
+
+  .loginpage-tenant-status.success {
+    color: #1b5e20;
+  }
+
+  .loginpage-tenant-status.error {
+    color: #c62828;
+  }
+
+  .loginpage-tenant-status code {
+    background: #f1f5f9;
+    padding: 0 4px;
+    border-radius: 4px;
+    font-family: 'Roboto Mono', 'Courier New', monospace;
+    font-size: 0.8rem;
+  }
+  

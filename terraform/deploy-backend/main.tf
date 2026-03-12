@@ -21,6 +21,20 @@ data "aws_kms_alias" "rds" {
   name  = var.rds_kms_alias_name
 }
 
+# ---------------------------------------------------------------------------
+# Documents layer — look up bucket ARN and KMS key from deploy-documents outputs
+# ---------------------------------------------------------------------------
+
+data "aws_ssm_parameter" "documents_bucket_arn" {
+  count = var.documents_ssm_parameter_prefix != null ? 1 : 0
+  name  = "${var.documents_ssm_parameter_prefix}/bucket_arn"
+}
+
+data "aws_ssm_parameter" "documents_kms_key_arn" {
+  count = var.documents_ssm_parameter_prefix != null ? 1 : 0
+  name  = "${var.documents_ssm_parameter_prefix}/kms_key_arn"
+}
+
 locals {
   name_prefix = "${var.project_name}-${var.environment}"
   effective_alb_ingress_prefix_list_ids = distinct(concat(
@@ -93,9 +107,16 @@ module "compute" {
   enable_detailed_monitoring  = var.private_instance_enable_detailed_monitoring
   enable_ssm_profile          = var.private_instance_enable_ssm_profile
   backend_secret_arns         = var.rds_ssm_parameter_prefix != null ? [data.aws_ssm_parameter.rds_secret_arn[0].value] : []
-  backend_kms_key_arns        = var.rds_kms_alias_name != null ? [data.aws_kms_alias.rds[0].target_key_arn] : []
-  backend_ssm_parameter_paths = var.rds_ssm_parameter_prefix != null ? [var.rds_ssm_parameter_prefix] : []
-  tags                        = local.tags
+  backend_kms_key_arns        = concat(
+    var.rds_kms_alias_name != null ? [data.aws_kms_alias.rds[0].target_key_arn] : [],
+    var.documents_ssm_parameter_prefix != null ? [data.aws_ssm_parameter.documents_kms_key_arn[0].value] : []
+  )
+  backend_ssm_parameter_paths = compact([
+    var.rds_ssm_parameter_prefix,
+    var.documents_ssm_parameter_prefix,
+  ])
+  backend_s3_document_bucket_arns = var.documents_ssm_parameter_prefix != null ? [data.aws_ssm_parameter.documents_bucket_arn[0].value] : []
+  tags                            = local.tags
 }
 
 module "alb" {
@@ -163,6 +184,51 @@ resource "aws_route53_record" "alb_alias_aaaa" {
     zone_id                = module.alb[0].zone_id
     evaluate_target_health = false
   }
+}
+
+module "ecr" {
+  count  = var.create_ecr ? 1 : 0
+  source = "../modules/ecr"
+
+  repositories = [
+    "${local.name_prefix}-backend-api",
+    "${local.name_prefix}-billing-api",
+    "${local.name_prefix}-ai-service",
+    "${local.name_prefix}-login-gateway",
+  ]
+
+  image_count_limit = var.ecr_image_count_limit
+  tags              = local.tags
+}
+
+# ECR pull permissions für die EC2 IAM Role
+resource "aws_iam_role_policy" "ecr_pull" {
+  count = var.create_ecr && var.private_instance_enable_ssm_profile ? 1 : 0
+
+  name = "${local.name_prefix}-ecr-pull"
+  role = "${local.name_prefix}-private-ec2-ssm-role"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "ECRPull"
+        Effect = "Allow"
+        Action = [
+          "ecr:GetDownloadUrlForLayer",
+          "ecr:BatchGetImage",
+          "ecr:BatchCheckLayerAvailability",
+        ]
+        Resource = values(module.ecr[0].repository_arns)
+      },
+      {
+        Sid      = "ECRAuth"
+        Effect   = "Allow"
+        Action   = "ecr:GetAuthorizationToken"
+        Resource = "*"
+      }
+    ]
+  })
 }
 
 module "vpc_endpoints" {

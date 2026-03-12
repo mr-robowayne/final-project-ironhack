@@ -1,0 +1,51 @@
+---
+# =============================================================================
+# site.yml — Erstes vollständiges Setup einer neuen EC2
+#
+# Führt aus: Docker installieren + nginx + Container deployen
+#
+# Verwendung:
+#   ansible-playbook playbooks/site.yml --ask-vault-pass
+#   ansible-playbook playbooks/site.yml --ask-vault-pass -e image_tag=1.2.3
+#   ansible-playbook playbooks/site.yml --ask-vault-pass -e cloudfront_domain=xyz.cloudfront.net
+#
+# Bestimmte Hosts:
+#   ansible-playbook playbooks/site.yml --limit patientsync-ec2-a --ask-vault-pass
+# =============================================================================
+
+- name: patientsync — Vollständiges Setup
+  hosts: patientsync_backend
+  become: true
+  gather_facts: true
+  serial: 1          # Eine EC2 nach der anderen (Rolling Deploy, keine Downtime)
+
+  vars_files:
+    - ../group_vars/vault.yml
+
+  pre_tasks:
+    - name: Setup-Info ausgeben
+      ansible.builtin.debug:
+        msg:
+          - "Host       : {{ inventory_hostname }}"
+          - "Image-Tag  : {{ image_tag }}"
+          - "AZ         : {{ placement.availability_zone | default('unbekannt') }}"
+
+  roles:
+    - role: docker-install
+    - role: nginx-proxy
+    - role: patientsync-deploy
+
+  post_tasks:
+    - name: Healthcheck via nginx
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:{{ ports.nginx }}/api/health"
+        status_code: 200
+        timeout: 10
+      retries: 6
+      delay: 5
+      register: final_health
+      until: final_health.status == 200
+
+    - name: Deploy abgeschlossen
+      ansible.builtin.debug:
+        msg: "✓ {{ inventory_hostname }} — alle Services laufen (Tag: {{ image_tag }})"

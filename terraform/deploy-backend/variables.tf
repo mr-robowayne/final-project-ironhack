@@ -342,8 +342,26 @@ variable "rds_kms_alias_name" {
   default     = null
 }
 
+variable "documents_ssm_parameter_prefix" {
+  description = "SSM parameter prefix for patient documents metadata from deploy-documents (e.g. /patientsync/prod/documents). Set to null to skip S3 documents access policy on EC2."
+  type        = string
+  default     = null
+}
+
 variable "tags" {
   description = "Additional tags to apply to all resources."
   type        = map(string)
   default     = {}
+}
+
+variable "create_ecr" {
+  description = "Create ECR repositories for patientsync services."
+  type        = bool
+  default     = false
+}
+
+variable "ecr_image_count_limit" {
+  description = "Number of images to keep per ECR repository (lifecycle policy)."
+  type        = number
+  default     = 10
 }

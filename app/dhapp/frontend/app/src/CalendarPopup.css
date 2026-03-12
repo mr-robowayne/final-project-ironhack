@@ -1,0 +1,62 @@
+.calendar-popup-overlay {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    background: rgba(255,255,255,0.45);
+    backdrop-filter: blur(8px) saturate(120%);
+    -webkit-backdrop-filter: blur(8px) saturate(120%);
+    z-index: 9999;
+    overflow: auto;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    padding: 50px 0;
+  }
+  
+  .calendar-popup-content {
+    position: relative;
+    width: 90%;
+    max-width: 1000px;
+    background: rgba(255,255,255,0.88);
+    backdrop-filter: blur(12px) saturate(120%);
+    -webkit-backdrop-filter: blur(12px) saturate(120%);
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 8px 30px rgba(0,0,0,0.12);
+    max-height: 90vh;
+    overflow-y: auto;
+    z-index: 10000; /* sicherstellen, dass Content über Overlay liegt */
+  }
+  
+  .calendar-close-btn {
+    position: absolute;
+    top: 12px;
+    right: 5px;
+    width: 32px;
+    height: 32px;
+    background: white;
+    border: 2px solid #ccc;
+    border-radius: 50%;
+    font-size: 18px;
+    line-height: 28px;
+    text-align: center;
+    cursor: pointer;
+    color: #555;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    transition: 
+      background-color 0.3s ease, 
+      border-color 0.3s ease,
+      color 0.3s ease;
+    z-index: 10001;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+  }
+  
+  .calendar-close-btn:hover {
+    background-color: #007bff;
+    border-color: #0056b3;
+    color: white;
+  }
+  

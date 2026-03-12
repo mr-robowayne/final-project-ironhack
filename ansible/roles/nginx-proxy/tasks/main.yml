@@ -1,0 +1,45 @@
+---
+# =============================================================================
+# Role: nginx-proxy
+# Installiert nginx als Reverse Proxy vor den Containern.
+# Routing: /api/* + WebSocket → backend-api:5000
+#          /login* /auth/*    → login-gateway:8080
+# =============================================================================
+
+- name: nginx installieren
+  ansible.builtin.apt:
+    name: nginx
+    state: present
+    update_cache: true
+
+- name: Default nginx Site deaktivieren
+  ansible.builtin.file:
+    path: /etc/nginx/sites-enabled/default
+    state: absent
+  notify: nginx reload
+
+- name: patientsync nginx Konfiguration deployen
+  ansible.builtin.template:
+    src: patientsync.conf.j2
+    dest: /etc/nginx/sites-available/patientsync.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: nginx reload
+
+- name: patientsync nginx Site aktivieren
+  ansible.builtin.file:
+    src: /etc/nginx/sites-available/patientsync.conf
+    dest: /etc/nginx/sites-enabled/patientsync.conf
+    state: link
+  notify: nginx reload
+
+- name: nginx Konfiguration validieren
+  ansible.builtin.command: nginx -t
+  changed_when: false
+
+- name: nginx starten und aktivieren
+  ansible.builtin.systemd:
+    name: nginx
+    state: started
+    enabled: true

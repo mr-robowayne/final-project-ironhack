@@ -1,0 +1,109 @@
+---
+# =============================================================================
+# Role: patientsync-deploy
+# Pulled Docker Images + docker-compose starten.
+# Läuft auf beiden EC2s gleichzeitig (Ansible parallele Execution).
+# =============================================================================
+
+# ── Env-Dateien deployen ──────────────────────────────────────────────────────
+
+- name: backend-api.env deployen
+  ansible.builtin.template:
+    src: backend-api.env.j2
+    dest: "{{ env_dir }}/backend-api.env"
+    owner: root
+    group: root
+    mode: "0600"
+
+- name: billing-api.env deployen
+  ansible.builtin.template:
+    src: billing-api.env.j2
+    dest: "{{ env_dir }}/billing-api.env"
+    owner: root
+    group: root
+    mode: "0600"
+
+- name: ai-service.env deployen
+  ansible.builtin.template:
+    src: ai-service.env.j2
+    dest: "{{ env_dir }}/ai-service.env"
+    owner: root
+    group: root
+    mode: "0600"
+
+- name: login-gateway.env deployen
+  ansible.builtin.template:
+    src: login-gateway.env.j2
+    dest: "{{ env_dir }}/login-gateway.env"
+    owner: root
+    group: root
+    mode: "0600"
+
+# ── docker-compose.yml deployen ───────────────────────────────────────────────
+
+- name: docker-compose.yml deployen
+  ansible.builtin.template:
+    src: docker-compose.yml.j2
+    dest: "{{ app_dir }}/docker-compose.yml"
+    owner: ubuntu
+    group: ubuntu
+    mode: "0640"
+
+# ── ECR Login (via IAM Role — kein Passwort nötig) ───────────────────────────
+
+- name: ECR Login
+  ansible.builtin.shell: |
+    aws ecr get-login-password --region {{ aws_region }} | \
+    docker login --username AWS --password-stdin {{ ecr_registry }}
+  changed_when: true
+  no_log: true
+
+# ── Images pullen ─────────────────────────────────────────────────────────────
+
+- name: Alle Images pullen (linux/amd64)
+  community.docker.docker_image:
+    name: "{{ item }}"
+    source: pull
+    force_source: true
+  loop:
+    - "{{ images.backend_api }}"
+    - "{{ images.billing_api }}"
+    - "{{ images.ai_service }}"
+    - "{{ images.login_gateway }}"
+
+# ── Container starten / neustarten ───────────────────────────────────────────
+
+- name: docker compose up (alle Services)
+  community.docker.docker_compose_v2:
+    project_src: "{{ app_dir }}"
+    state: present
+    pull: always
+    remove_orphans: true
+  register: compose_result
+
+- name: Gestartete Container anzeigen
+  ansible.builtin.debug:
+    msg: "{{ compose_result.containers | map(attribute='Name') | list }}"
+  when: compose_result.containers is defined
+
+# ── Healthchecks ──────────────────────────────────────────────────────────────
+
+- name: Warten bis backend-api antwortet
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ ports.backend_api }}/api/health"
+    status_code: 200
+    timeout: 5
+  register: health_check
+  retries: 12
+  delay: 5
+  until: health_check.status == 200
+
+- name: Warten bis login-gateway antwortet
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ ports.login_gateway }}/health"
+    status_code: [200, 404]
+    timeout: 5
+  register: gw_health
+  retries: 6
+  delay: 5
+  until: gw_health.status in [200, 404]

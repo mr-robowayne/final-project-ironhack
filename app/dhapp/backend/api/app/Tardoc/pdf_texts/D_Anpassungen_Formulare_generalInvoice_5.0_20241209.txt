@@ -1,0 +1,215 @@
+Anpassungen der Formulare
+XML-Standard generalInvoice 5.0
+Finale Version
+fachorgan@forum-datenaustausch.ch
+09.12.2024
+1
+Aufbau der Formulare
+• Welche gesetzlichen Bestimmungen gelten für die Formulare?
+• Welche generellen Anforderungen sind zu erfüllen?
+• Benötigte Formulare Tiers Garant
+• Benötigte Formulare Tiers Payant / Tiers Soldant
+• Prozess-Varianten der Leistungsabrechnung
+• Anpassungen einheitliches Formular
+• Anpassung Barcodeblatt Kodierung und Decodierung
+• Welche inhaltliche Anforderungen an die Formulare gibt es?
+• Wie ist der generelle Aufbau der Formulare?
+2
+Welche gesetzlichen Bestimmungen gelten für die Formulare?
+Ein Formular muss die gesetzlich definierten Abrechnungsprozesse unterstützen
+• Tiers Garant / Tiers Payant / Tiers Soldant → (KVG 42)
+Ein Formular muss die gesetzlich definierten Vorgaben erfüllen
+• Die Leistungserbringer müssen den Schuldnern detaillierte und verständliche Rechnungen zustellen. (KVG 42)
+• Die Leistungserbringer müssen den Patienten verständliche und nachvollziehbare Rechnungen oder
+Rechnungskopien zustellen. (KVV 59)
+• Die Versicherten haben das Recht kostenlose Papier-Rechnungen oder Papier-Rechnungskopien zu erhalten.
+Egal welcher Abrechnungsprozess in Anwendung kommt, die Versicherer haben das Recht die Rechnungen
+als elektronische XML-Datei zu erhalten. → Kostenmassnahmen Paket 2 (BR)
+• Die gesetzlich definierten Rechnungsinhalte müssen vollständig und korrekt abgebildet sein. (KVG xx)
+Ein Formular darf keinen Zwang ohne gesetzliche Grundlage erzeugen
+• Ein Formular darf keine Drittverpflichtungen erzwingen, vertragliche Vereinbarungen sollen
+jedoch möglich sein.
+3
+Welche generellen Anforderungen sind zu erfüllen?
+• Die Leistungserbringer können nicht verpflichtet werden, Rechnungen
+elektronisch zu versenden. Sie müssen lediglich sicherstellen, dass die
+Patienten verständliche Rechnungen und die Versicherer elektronische
+Rechnungen im XML-Format erhalten.
+• Die Versicherer können nicht gezwungen werden, Rechnungen im XML-
+Format elektronisch zu empfangen. Sie sind lediglich verpflichtet, die
+gesetzlichen Anforderungen der Leistungsabrechnung zu erfüllen.
+• Patienten haben das Recht auf eine kostenlose und verständliche Rechnung in
+Papierform. Sie können die Rechnung selbst bezahlen, ohne sie bei einer
+Versicherung einzureichen. Sie müssen jedoch in der Lage sein, innerhalb von
+5 Jahren eine Papier-Rechnung im XML-Format ohne Hilfe Dritter bei einer
+Versicherung einzureichen.
+4
+Benötigte Formulare Tiers Garant
+Dokumente an
+Versicherte
+Rechnung an Patienten Detaillierter Barcodeblatt mit
+mit QR-Einzahlungsschein Rückforderungsbeleg an den Rechnung im XML-Format
+sowie verständlicher Rechnung Schuldner KVG 42 «elektronische Einreichung»
+KVV 59 an Versicherung
+Einreichung der Originale
+an die Versicherung
+5
+Benötigte Formulare Tiers Payant / Tiers Soldant
+Dokumente an
+die Versicherung
+Patientenkopie der TP-Rechnung Detaillierte und verständliche Barcodeblatt mit
+in verständlicher Form Rechnung (Kopie) inkl. QR-Code Rechnung im XML-Format
+KVV 59 an den Schuldner KVG 42 «elektronische Einreichung»
+an Versicherung
+Kopien an
+die Versicherten
+6
+Prozess-Varianten der Leistungsabrechnung
+Einreichung Weiterleitung Abholung
+Siehe Dokument Prozesse Leistungsübersicht
+7
+Anpassungen einheitliches Formular
+Erste Seite
+5.0 (Workshop) 5.0 (2.K.)
+SPLG 1234
+8
+Anpassungen einheitliches Formular
+Letzte Seite
+5.0 (Workshop) 5.0 (2.K.)
+9
+Anpassungen einheitliches Formular
+Barcodeblatt
+5.0 (Workshop) 5.0 (2.K.)
+Technische Anpassungen aufgrund von praktischen Funktionstests:
+• Nummerierung zentriert oberhalb der QR-Codes & entfernen der technischen Debuginformationen
+• Kompressionsmethode DEFLATE/zlib anstatt zip mit der Empfehlung zum höchsten Kompressionslevel
+• Base64 Codierung und Auffüllen mit Leerzeichen
+10
+Anpassungen einheitliches Formular
+Leistungsübersicht zur Behandlung → Empfehlungscharakter
+5.0 (Workshop) 5.0 (2.K.)
+11
+Anpassungen Barcodeblatt Kodierung und Decodierung
+Barcodeblatt
+5.0 (Workshop und 2.K.)
+* https://www.swisseduc.ch/informatik/theoretische_informatik/qr_codes/docs/qr_standard.pdf 12
+Welche inhaltliche Anforderungen an die Formulare gibt es?
+Kein druckbarer Bereich → «Kein randabfallender Druck» ISO 18004 Elektronische Einreichung Papier-Rechnung
+Formulartitel und Patientenhinweis zur Verwendung Identifikation Rechnung Nr. / Behandlung / GUID
+ISO 20022 – Swiss Payment Standards - SIX Group Anlehnung an swissdigin-Standard eCH
+Auflistung der Mehrwertsteuer CHF und der %-Sätze Berufliche Zulassung und Qualifikation
+Couvertfenster (links oder rechts) & digitale Briefmarke Detaillierte und verständliche Rechnung KVG Art 42/3
+Namen und Angaben des Patienten Rechnungssteller GLN
+Verständliche und nachvollziehbare Rechnung KVV 59 Leistungserbringer GLN/UID & ZSR
+OCR-Tauglichkeit Auftraggeber GLN & ZSR
+Patientenidentifikation / VeKa-Daten
+13
+Restliche Rechnungsangaben (keine Änderung zu 4.5)
+Wie ist der generelle Aufbau der Formulare?
+Rückforderungsbeleg Version 5.0 → Partner-Rollen
+Verwendungshinweis für Patienten
+Rechnungssteller:
+→ Angabe des Rechnungsstellers mit GLN (B) → Biller
+→ Rechnungssteller mit unterschiedlicher ZSR
+Garant:
+→ Angabe der GLN (Guarantor) → Bei der TP-Rechnung
+Leistungserbringer:
+→ Leistungserbringer GLN (P) →Provider:
+→ Muss eine UID besitzen
+→ Übereinstimmung Person (nat./jur.) GLN → UID
+→ Adresse der GLN (P) → Provider
+→ Leistungserbringer GLN (L) → Location:
+→ Falls nicht unterschiedlich, identisch mit GLN (P)
+→ ZSR (P) → Provider:
+→ Angabe der vertraglich vereinbarten ZSR
+→ ZSR (B) → Biller:
+→ Angabe der vertraglich vereinbarten ZSR
+Zuweiser:
+→ GLN (Zuweiser) und ZSR (Zuweiser)
+GLN-Liste: → Leistungsposition
+→ GLN (Ausführende) und GLN (Verantwortliche)
+14
+Wie ist der generelle Aufbau der Formulare?
+Rückforderungsbeleg Version 5.0 → Patient
+Verwendungshinweis für Patienten
+XML-Schema
+Soziales Geschlecht
+Biologisches Geschlecht
+Versichertenkarte
+AHV-Nr.
+Versicherten-Nr.
+card_id VEKA-Nr.
+Fallnummer / Verfügungsnummer
+Falldatum / Verfügungsdatum
+15
+Wie ist der generelle Aufbau der Formulare?
+Rückforderungsbeleg Version 5.0 → Positionen
+Verwendungshinweis für Patienten
+Version 5.0
+Tarifziffer / Bezugsziffer:
+Kolonne verbreitert: Platz für zwei GTIN
+Kolonne P: Medizinisch indiziert gelöscht
+Summe: davon PFL gelöscht
+Version 4.5
+16
+Wie ist der generelle Aufbau der Formulare?
+Rückforderungsbeleg → Positionen & QR-Code
+Verwendungshinweis für Patienten
+Version 5.0
+Tarifziffer / Bezugsziffer:
+Kolonne verbreitert: Platz für zwei GTIN
+Kolonne P: Medizinisch indiziert gelöscht
+Summe: davon PFL gelöscht
+Version 4.5
+17
+Wie ist der generelle Aufbau der Formulare?
+Patientenrechnung mit QR-Code / Leistungsübersicht zur Behandlung
+Empfehlung
+Verwendungshinweis für Patienten
+g
+a
+t
+r
+e
+d
+n
+e
+la
+d K
+n e o Kapitel-Gruppierung
+g r p
+ie
+d
+t s n
+f e
+u g
+a
+m
+ie
+t
+Medikamente / Labor / MiGeL / Physio / etc.
+s
+u f
+ir
+a
+u
+a
+werden detailliert ausgewiesen.
+d p
+n y
+e t
+la f ir
+K a
+T
+18
+Wie ist der generelle Aufbau der Formulare?
+Tiers Garant / Payant Barcodeblatt
+Verwendungshinweis für Patienten
+Identifikation Rechnung / GUID
+Identifikation Patient
+Maximal 12 QR-Codes
+Gezippte XML Datei
+Dieses Barcodeblatt kann genutzt werden um den Rechnungsinhalt maschinell mit einem App verständlich darzustellen.
+19
+fachorgan@forum-datenaustausch.ch
+20
