@@ -3,6 +3,7 @@ name: Terraform
 
 # Triggers — when should the pipeline run?
 on:
+  workflow_dispatch:
   push:
     branches:
       - main        # to main branch
@@ -31,8 +32,7 @@ jobs:
     runs-on: ubuntu-latest # runs on a GitHub-hosted Ubuntu server
     environment: development # uses secrets from GitHub Environment "development"
 
-    # Läuft nur bei direktem Push auf development (kein PR — Environment blockiert refs/pull/*)
-    if: github.ref == 'refs/heads/development' && github.event_name == 'push'
+    if: github.ref == 'refs/heads/development' || (github.event_name == 'pull_request' && github.base_ref == 'development')
 
     steps:
       # Download the repository code
@@ -103,15 +103,15 @@ jobs:
         working-directory: terraform/deploy-aws
 
   # -------------------------------------------------------
-  # JOB 2: Production — Plan + Apply
+  # JOB 2: Production — Plan only, no Apply
+  # Apply must be run manually via CLI (terraform apply tfplan)
   # -------------------------------------------------------
   terraform-prod:
     name: Terraform Production
     runs-on: ubuntu-latest
     environment: production # uses secrets from GitHub Environment "production"
 
-    # Läuft nur bei direktem Push auf main (kein PR — Environment blockiert refs/pull/*)
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    if: github.ref == 'refs/heads/main' || (github.event_name == 'pull_request' && github.base_ref == 'main')
 
     steps:
       - name: Checkout
@@ -170,15 +170,7 @@ jobs:
         run: terraform validate
         working-directory: terraform/deploy-aws
 
-      # Plan with -out=tfplan — saves the plan as a file
-      # ensures Apply runs the exact same plan
+      # Plan only — Apply must be run manually via CLI
       - name: Terraform Plan
-        run: terraform plan -var-file=variables.tfvars -out=tfplan
-        working-directory: terraform/deploy-aws
-
-      # Apply ONLY on direct push (not on PR)
-      # meaning only when actually merged into main
-      - name: Terraform Apply
-        if: github.event_name == 'push'
-        run: terraform apply -auto-approve tfplan
+        run: terraform plan -var-file=variables.tfvars
         working-directory: terraform/deploy-aws
