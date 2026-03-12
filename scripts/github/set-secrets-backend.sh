@@ -59,13 +59,13 @@ fi
 echo ""
 echo "── Secrets werden gesetzt... ──────────────────────────────────"
 
-# production Environment
-echo "  [production] AWS_ROLE_ARN"
+# AWS_ROLE_ARN auf repo-Ebene → alle Pipelines (Terraform dev+prod, Backend prod) erben es
+echo "  [repo] AWS_ROLE_ARN"
 gh secret set AWS_ROLE_ARN \
   --body "$AWS_ROLE_ARN" \
-  --env production \
   --repo "$REPO"
 
+# ANSIBLE_VAULT_PASS nur in production Environment → nur Backend-Deploy hat Zugriff
 echo "  [production] ANSIBLE_VAULT_PASS"
 gh secret set ANSIBLE_VAULT_PASS \
   --body "$ANSIBLE_VAULT_PASS" \
