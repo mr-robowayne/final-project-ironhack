@@ -31,15 +31,20 @@
           - "Image-Tag  : {{ image_tag }}"
           - "AZ         : {{ placement.availability_zone | default('unbekannt') }}"
 
+    - name: Docker Dangling Images + Build-Cache bereinigen (Disk-Platz freigeben)
+      ansible.builtin.shell: docker system prune -f 2>&1 || true
+      changed_when: true
+      ignore_errors: true
+
   roles:
     - role: docker-install
     - role: nginx-proxy
     - role: patientsync-deploy
 
   post_tasks:
-    - name: Healthcheck via nginx
+    - name: Healthcheck via nginx (nginx /health — kein FORCE_HTTPS Redirect)
       ansible.builtin.uri:
-        url: "http://127.0.0.1:{{ ports.nginx }}/api/health"
+        url: "http://127.0.0.1:{{ ports.nginx }}/health"
         status_code: 200
         timeout: 10
       retries: 6
