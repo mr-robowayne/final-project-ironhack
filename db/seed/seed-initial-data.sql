@@ -21,18 +21,18 @@
 
 \set ON_ERROR_STOP on
 
-DO $$
+DO $seed$
 DECLARE
-  v_tenant_id    UUID;
+  v_tenant_id    TEXT;
   v_schema       TEXT;
   v_role_id      UUID;
   v_user_id      UUID;
 
-  -- Variables injected from psql -v flags
-  v_admin_email    TEXT := :'ADMIN_EMAIL';
-  v_admin_fname    TEXT := :'ADMIN_FIRST_NAME';
-  v_admin_lname    TEXT := :'ADMIN_LAST_NAME';
-  v_admin_password TEXT := :'ADMIN_PASSWORD';
+  -- Variables injected via SET app.* session variables
+  v_admin_email    TEXT := current_setting('app.admin_email');
+  v_admin_fname    TEXT := current_setting('app.admin_fname');
+  v_admin_lname    TEXT := current_setting('app.admin_lname');
+  v_admin_password TEXT := current_setting('app.admin_pass');
 
   -- Fixed tenant configuration
   c_tenant_key     CONSTANT TEXT := 'dhpatientsync';
@@ -134,4 +134,4 @@ BEGIN
 
   RAISE NOTICE '[SEED] Seed completed successfully.';
 
-END$$;
+END$seed$;

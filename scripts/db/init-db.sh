@@ -68,7 +68,7 @@ success "Flyway-User konfiguriert."
 python3 - << PYEOF
 import pathlib
 cfg = (
-    "flyway.url=jdbc:postgresql://127.0.0.1:${LOCAL_PORT}/${DB_NAME}?ssl=true&sslmode=require\n"
+    "flyway.url=jdbc:postgresql://host.docker.internal:${LOCAL_PORT}/${DB_NAME}?ssl=true&sslmode=require\n"
     "flyway.user=patientsync_flyway\n"
     "flyway.password=${FLYWAY_PASS}\n"
     "flyway.locations=filesystem:/flyway/sql\n"
@@ -88,12 +88,12 @@ PYEOF
 # -------------------------------------------------------
 header "Flyway Migrationen (V1–V4)"
 
-docker run --rm \
-  --network host \
-  -v "${DB_SQL_DIR}:/flyway/sql:ro" \
-  -v "${FLYWAY_CONF_TMP}:/flyway/conf/flyway.conf:ro" \
-  flyway/flyway:10 \
-  migrate
+FLYWAY_CONTAINER="patientsync-flyway-$$"
+docker create --name "${FLYWAY_CONTAINER}" --network host flyway/flyway:10 migrate
+docker cp "${DB_SQL_DIR}/." "${FLYWAY_CONTAINER}:/flyway/sql/"
+docker cp "${FLYWAY_CONF_TMP}" "${FLYWAY_CONTAINER}:/flyway/conf/flyway.conf"
+docker start -a "${FLYWAY_CONTAINER}"
+docker rm "${FLYWAY_CONTAINER}" 2>/dev/null
 
 rm -f "${FLYWAY_CONF_TMP}"
 success "Flyway Migrationen abgeschlossen."
@@ -114,10 +114,10 @@ if [ "$RUN_SEED" = true ]; then
 
   psql "${DB_CONN_STRING}" \
     --no-psqlrc \
-    -v "ADMIN_EMAIL=${ADMIN_EMAIL}" \
-    -v "ADMIN_FIRST_NAME=${ADMIN_FNAME}" \
-    -v "ADMIN_LAST_NAME=${ADMIN_LNAME}" \
-    -v "ADMIN_PASSWORD=${ADMIN_PASS}" \
+    -c "SET app.admin_email = '${ADMIN_EMAIL}';" \
+    -c "SET app.admin_fname = '${ADMIN_FNAME}';" \
+    -c "SET app.admin_lname = '${ADMIN_LNAME}';" \
+    -c "SET app.admin_pass = '${ADMIN_PASS}';" \
     -f "${DB_SEED_DIR}/seed-initial-data.sql"
 
   echo ""
