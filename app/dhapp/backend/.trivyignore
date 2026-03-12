@@ -6,5 +6,10 @@ CVE-2024-22363
 
 # tar — transitive dependency (via puppeteer/nodemon)
 # Fix requires major version bump (6→7) which breaks indirect parent packages
-# npm audit fix --force not safe in production builds
-CVE-2024-28863
+# npm audit fix --force not safe in production builds; risk accepted
+CVE-2026-23745
+CVE-2026-23950
+CVE-2026-24842
+CVE-2026-26960
+CVE-2026-29786
+CVE-2026-31802
