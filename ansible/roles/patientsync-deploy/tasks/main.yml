@@ -85,6 +85,16 @@
     - "{{ images.ai_service }}"
     - "{{ images.login_gateway }}"
 
+# ── Alte Container sauber entfernen (verhindert Name-Conflicts) ─────────────
+
+- name: Alte Container stoppen und entfernen
+  ansible.builtin.shell: |
+    cd "{{ app_dir }}"
+    docker compose down --remove-orphans --timeout 30 2>/dev/null || true
+    # Verwaiste Container mit Prefix entfernen (z.B. 6e1228710c93_patientsync-*)
+    docker ps -a --filter "name=patientsync-" --format "{% raw %}{{.ID}}{% endraw %}" | xargs -r docker rm -f 2>/dev/null || true
+  changed_when: true
+
 # ── Container starten / neustarten ───────────────────────────────────────────
 
 - name: docker compose up (alle Services)
@@ -93,6 +103,7 @@
     state: present
     pull: always
     remove_orphans: true
+    recreate: always
   register: compose_result
 
 - name: Gestartete Container anzeigen
