@@ -64,7 +64,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Trivy Filesystem-Scan
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@0.30.0
         with:
           scan-type:      fs
           scan-ref:       app/dhapp/backend
@@ -212,7 +212,7 @@ jobs:
 
       - name: Trivy Image-Scan — backend-api
         if: github.event_name == 'push'
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@0.30.0
         with:
           image-ref:      ${{ env.ECR_REGISTRY }}/${{ env.ECR_PROJECT }}-backend-api:${{ steps.tag.outputs.tag }}
           severity:       CRITICAL,HIGH
@@ -222,7 +222,7 @@ jobs:
 
       - name: Trivy Image-Scan — billing-api
         if: github.event_name == 'push'
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@0.30.0
         with:
           image-ref:      ${{ env.ECR_REGISTRY }}/${{ env.ECR_PROJECT }}-billing-api:${{ steps.tag.outputs.tag }}
           severity:       CRITICAL,HIGH
@@ -232,7 +232,7 @@ jobs:
 
       - name: Trivy Image-Scan — ai-service
         if: github.event_name == 'push'
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@0.30.0
         with:
           image-ref:      ${{ env.ECR_REGISTRY }}/${{ env.ECR_PROJECT }}-ai-service:${{ steps.tag.outputs.tag }}
           severity:       CRITICAL,HIGH
@@ -242,7 +242,7 @@ jobs:
 
       - name: Trivy Image-Scan — login-gateway
         if: github.event_name == 'push'
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@0.30.0
         with:
           image-ref:      ${{ env.ECR_REGISTRY }}/${{ env.ECR_PROJECT }}-login-gateway:${{ steps.tag.outputs.tag }}
           severity:       CRITICAL,HIGH

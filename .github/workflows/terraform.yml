@@ -31,10 +31,8 @@ jobs:
     runs-on: ubuntu-latest # runs on a GitHub-hosted Ubuntu server
     environment: development # uses secrets from GitHub Environment "development"
 
-    # This job runs ONLY when:
-    # - a direct push to development happens
-    # - or a PR targeting development is opened
-    if: github.ref == 'refs/heads/development' || (github.event_name == 'pull_request' && github.base_ref == 'development')
+    # Läuft nur bei direktem Push auf development (kein PR — Environment blockiert refs/pull/*)
+    if: github.ref == 'refs/heads/development' && github.event_name == 'push'
 
     steps:
       # Download the repository code
@@ -112,10 +110,8 @@ jobs:
     runs-on: ubuntu-latest
     environment: production # uses secrets from GitHub Environment "production"
 
-    # This job runs ONLY when:
-    # - a direct push to main happens
-    # - or a PR targeting main is opened
-    if: github.ref == 'refs/heads/main' || (github.event_name == 'pull_request' && github.base_ref == 'main')
+    # Läuft nur bei direktem Push auf main (kein PR — Environment blockiert refs/pull/*)
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
 
     steps:
       - name: Checkout
