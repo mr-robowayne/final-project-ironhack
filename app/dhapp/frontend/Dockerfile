@@ -8,7 +8,7 @@ RUN npm ci --no-audit --no-fund
 COPY app/ ./
 ARG REACT_APP_API_BASE=https://backend.example.com
 ARG REACT_APP_API_URL=https://backend.example.com
-ARG REACT_APP_DEFAULT_TENANT=test
+ARG REACT_APP_DEFAULT_TENANT=dhpatientsync
 ARG REACT_APP_LT_API_URL=
 ARG REACT_APP_CHAT_NOTIFICATION_PREVIEW=false
 ARG REACT_APP_BACKEND_PORT=

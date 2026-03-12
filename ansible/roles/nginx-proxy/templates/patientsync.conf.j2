@@ -17,6 +17,14 @@ map $http_upgrade $connection_upgrade {
     ''      close;
 }
 
+# ALB terminiert TLS und sendet X-Forwarded-Proto. Wir leiten den
+# Original-Wert weiter, damit backend-api den Request als HTTPS erkennt
+# und keinen 308-Redirect-Loop auslöst.
+map $http_x_forwarded_proto $forwarded_proto {
+    default $http_x_forwarded_proto;
+    ''      $scheme;
+}
+
 server {
     listen {{ ports.nginx }};
     server_name _;
@@ -45,7 +53,7 @@ server {
         proxy_set_header   Host              $host;
         proxy_set_header   X-Real-IP         $remote_addr;
         proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
-        proxy_set_header   X-Forwarded-Proto $scheme;
+        proxy_set_header   X-Forwarded-Proto $forwarded_proto;
         proxy_read_timeout 30s;
         proxy_send_timeout 30s;
     }
@@ -59,7 +67,7 @@ server {
         proxy_set_header       Host              $host;
         proxy_set_header       X-Real-IP         $remote_addr;
         proxy_set_header       X-Forwarded-For   $proxy_add_x_forwarded_for;
-        proxy_set_header       X-Forwarded-Proto $scheme;
+        proxy_set_header       X-Forwarded-Proto $forwarded_proto;
         proxy_read_timeout     3600s;
         proxy_send_timeout     3600s;
     }
@@ -72,7 +80,7 @@ server {
         proxy_set_header   Host              $host;
         proxy_set_header   X-Real-IP         $remote_addr;
         proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
-        proxy_set_header   X-Forwarded-Proto $scheme;
+        proxy_set_header   X-Forwarded-Proto $forwarded_proto;
         proxy_read_timeout 60s;
         proxy_send_timeout 60s;
 
@@ -88,7 +96,7 @@ server {
         proxy_set_header   Host              $host;
         proxy_set_header   X-Real-IP         $remote_addr;
         proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
-        proxy_set_header   X-Forwarded-Proto $scheme;
+        proxy_set_header   X-Forwarded-Proto $forwarded_proto;
         proxy_read_timeout 120s;
     }
 
@@ -100,7 +108,7 @@ server {
         proxy_set_header   Host              $host;
         proxy_set_header   X-Real-IP         $remote_addr;
         proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
-        proxy_set_header   X-Forwarded-Proto $scheme;
+        proxy_set_header   X-Forwarded-Proto $forwarded_proto;
         proxy_read_timeout 30s;
     }
 }

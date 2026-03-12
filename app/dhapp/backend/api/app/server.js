@@ -1095,9 +1095,10 @@ function mapTenantRoleToLegacyRole(roleName) {
 async function resolveIdentifierEmail(tenantCtx, identifier) {
   const normalized = String(identifier || '').trim().toLowerCase();
   if (!normalized) return null;
+  const schema = quoteSchemaIdent(tenantCtx?.schemaName || `tenant_${tenantCtx?.id}`, tenantCtx?.id);
   const { rows } = await tenantCtx.db.query(
     `SELECT email
-       FROM users
+       FROM ${schema}.users
       WHERE lower(email) = $1
         AND deleted_at IS NULL
       LIMIT 1`,
@@ -1179,10 +1180,11 @@ async function findTenantAuthUserById(tenantCtx, userId) {
 async function buildAppUserFromTenantAuth(tenantCtx, tenantAuthUser) {
   if (!tenantAuthUser) return null;
   const legacyRole = mapTenantRoleToLegacyRole(tenantAuthUser.role_name);
+  const schema = quoteSchemaIdent(tenantCtx?.schemaName || `tenant_${tenantCtx?.id}`, tenantCtx?.id);
   const { rows } = await tenantCtx.db.query(
     `SELECT u.user_id, u.email, u.display_name, u.first_name, u.last_name, u.initials, u.is_active, r.name AS role_name
-       FROM users u
-       LEFT JOIN roles r ON r.role_id = u.role_id
+       FROM ${schema}.users u
+       LEFT JOIN ${schema}.roles r ON r.role_id = u.role_id
       WHERE u.user_id = $1
         AND u.deleted_at IS NULL
       LIMIT 1`,
@@ -1404,7 +1406,7 @@ app.post('/api/login', loginLimiter, async (req, res) => {
     });
   } catch (e) {
     console.error(e);
-    await audit(tenantCtx || tenantId || 'unknown', 'login.error', { username, error: e.message });
+    await audit(tenantCtx || tenantId || 'unknown', 'login.error', { username: identifier, error: e.message });
     res.status(500).json({ message: 'Serverfehler' });
   }
 });
