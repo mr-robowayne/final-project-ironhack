@@ -63,6 +63,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: npm install (aktualisiert package-lock für Scan)
+        run: |
+          npm install --prefix app/dhapp/backend/api/app
+          npm install --prefix app/dhapp/backend/ai-service/app
+          npm install --prefix app/dhapp/backend/billing-service/app
+
       - name: Trivy installieren
         run: curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
 
