@@ -31,8 +31,8 @@
           - "Image-Tag  : {{ image_tag }}"
           - "AZ         : {{ placement.availability_zone | default('unbekannt') }}"
 
-    - name: Docker Dangling Images + Build-Cache bereinigen (Disk-Platz freigeben)
-      ansible.builtin.shell: docker system prune -f 2>&1 || true
+    - name: Alle ungenutzten Docker Images entfernen (Disk-Platz freigeben)
+      ansible.builtin.shell: docker image prune -af 2>&1 || true
       changed_when: true
       ignore_errors: true
 
