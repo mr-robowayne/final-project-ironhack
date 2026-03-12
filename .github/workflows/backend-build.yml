@@ -266,6 +266,10 @@ jobs:
         run: |
           pip install --quiet ansible boto3 botocore
           ansible-galaxy collection install amazon.aws community.aws community.docker
+          # AWS Session Manager Plugin (für SSM-Verbindung zu EC2s)
+          curl -fsSL "https://s3.amazonaws.com/session-manager-downloads/plugin/latest/ubuntu_64bit/session-manager-plugin.deb" \
+            -o /tmp/ssm-plugin.deb
+          sudo dpkg -i /tmp/ssm-plugin.deb
 
       - name: Ansible Vault Passwort schreiben
         run: echo "${{ secrets.ANSIBLE_VAULT_PASS }}" > /tmp/vault_pass
@@ -276,7 +280,7 @@ jobs:
         env:
           ANSIBLE_HOST_KEY_CHECKING: "False"
         run: |
-          ansible-playbook playbooks/deploy.yml \
+          ansible-playbook playbooks/site.yml \
             --vault-password-file /tmp/vault_pass \
             -e image_tag=${{ needs.build-prod.outputs.image_tag }}
 
