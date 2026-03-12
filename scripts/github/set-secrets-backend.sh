@@ -40,13 +40,15 @@ if ! gh auth status &>/dev/null; then
   exit 1
 fi
 
-# ── Ansible Vault Passwort abfragen ───────────────────────────────────────────
-echo ""
-echo "── Ansible Vault ──────────────────────────────────────────────"
-echo "  Das Passwort das du beim 'ansible-vault encrypt group_vars/vault.yml' vergibst."
-echo ""
-read -rsp "  ANSIBLE_VAULT_PASS : " ANSIBLE_VAULT_PASS
-echo ""
+# ── Ansible Vault Passwort — von Env-Variable oder interaktiv ────────────────
+if [[ -z "${ANSIBLE_VAULT_PASS:-}" ]]; then
+  echo ""
+  echo "── Ansible Vault ──────────────────────────────────────────────"
+  echo "  Das Passwort das du beim 'ansible-vault encrypt group_vars/vault.yml' vergibst."
+  echo ""
+  read -rsp "  ANSIBLE_VAULT_PASS : " ANSIBLE_VAULT_PASS
+  echo ""
+fi
 
 if [[ -z "$ANSIBLE_VAULT_PASS" ]]; then
   echo "✗ Ansible Vault Passwort darf nicht leer sein."
