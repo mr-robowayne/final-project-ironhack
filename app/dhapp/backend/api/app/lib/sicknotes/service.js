@@ -17,26 +17,26 @@ const yyyymmdd = (d) => {
 
 async function listSickNotes(tenantCtx, patientId) {
   const { rows } = await tenantCtx.db.query(
-    `SELECT id, tenant_id, patient_id, start_date, end_date, open_end, degree_percent, receiver_type, status, created_at, updated_at, pdf_path
+    `SELECT sick_note_id, sick_note_id AS id, patient_id, start_date, end_date, open_end, degree_percent, receiver_type, status, created_at, updated_at, pdf_path
        FROM sick_notes
-      WHERE tenant_id = $1 AND patient_id = $2
-      ORDER BY created_at DESC, id DESC`,
-    [tenantCtx.id, Number(patientId)]
+      WHERE patient_id = $1
+      ORDER BY created_at DESC, sick_note_id DESC`,
+    [patientId]
   );
   return rows;
 }
 
 async function getSickNote(tenantCtx, id) {
   const { rows } = await tenantCtx.db.query(
-    `SELECT id, tenant_id, patient_id, created_at, updated_at, created_by_user_id,
+    `SELECT sick_note_id, sick_note_id AS id, patient_id, created_at, updated_at, created_by,
             start_date, end_date, open_end, degree_percent,
             diagnosis_short, remark,
             receiver_type, receiver_name, receiver_address,
             status, pdf_path, document_path
        FROM sick_notes
-      WHERE tenant_id = $1 AND id = $2
+      WHERE sick_note_id = $1
       LIMIT 1`,
-    [tenantCtx.id, Number(id)]
+    [id]
   );
   return rows[0] || null;
 }
@@ -59,21 +59,21 @@ async function createSickNote(tenantCtx, payload, userId) {
 
   const { rows } = await tenantCtx.db.query(
     `INSERT INTO sick_notes (
-       tenant_id, patient_id, created_by_user_id,
+       patient_id, created_by,
        start_date, end_date, open_end, degree_percent,
        diagnosis_short, remark, receiver_type, receiver_name, receiver_address,
        status
      ) VALUES (
-       $1, $2, $3,
-       COALESCE($4, CURRENT_DATE), $5, COALESCE($6,false), COALESCE($7, 100),
-       $8, $9, COALESCE($10,'PATIENT'), $11, $12,
+       $1, $2,
+       COALESCE($3, CURRENT_DATE), $4, COALESCE($5,false), COALESCE($6, 100),
+       $7, $8, COALESCE($9,'PATIENT'), $10, $11,
        'DRAFT'
      )
-     RETURNING id, tenant_id, patient_id, start_date, end_date, open_end, degree_percent,
+     RETURNING sick_note_id, sick_note_id AS id, patient_id, start_date, end_date, open_end, degree_percent,
                diagnosis_short, remark, receiver_type, receiver_name, receiver_address,
                status, created_at, updated_at, pdf_path`,
     [
-      tenantCtx.id, Number(patient_id), Number(userId) || null,
+      patient_id, userId || null,
       start_date || null, end_date || null, Boolean(open_end), Number(degree_percent),
       diagnosis_short, remark, receiver_type, receiver_name, receiver_address,
     ]
@@ -89,7 +89,7 @@ async function updateSickNote(tenantCtx, id, payload) {
     return existing;
   }
   const fields = [];
-  const params = [tenantCtx.id, Number(id)];
+  const params = [id];
   let idx = params.length;
   const mapping = {
     start_date: 'start_date', end_date: 'end_date', open_end: 'open_end', degree_percent: 'degree_percent',
@@ -103,8 +103,8 @@ async function updateSickNote(tenantCtx, id, payload) {
   if (!fields.length) return existing;
   const { rows } = await tenantCtx.db.query(
     `UPDATE sick_notes SET ${fields.join(', ')}, updated_at = now()
-      WHERE tenant_id = $1 AND id = $2
-      RETURNING id, tenant_id, patient_id, created_at, updated_at, created_by_user_id,
+      WHERE sick_note_id = $1
+      RETURNING sick_note_id, sick_note_id AS id, patient_id, created_at, updated_at, created_by,
                 start_date, end_date, open_end, degree_percent, diagnosis_short, remark,
                 receiver_type, receiver_name, receiver_address, status, pdf_path, document_path`,
     params
@@ -118,7 +118,8 @@ async function writeSickNotePdfToPatientFiles(tenantCtx, patientId, note, buffer
   const targetDir = path.join(patientDir, 'krankmeldungen');
   await fsp.mkdir(targetDir, { recursive: true, mode: 0o750 });
   const date = yyyymmdd(note.created_at || Date.now());
-  const stem = `AU_${date}_${note.id}_${sanitize(String(note.degree_percent||100))}pct`;
+  const noteId = note.sick_note_id || note.id;
+  const stem = `AU_${date}_${noteId}_${sanitize(String(note.degree_percent||100))}pct`;
   const fileName = `${stem}.pdf`;
   const absPath = path.join(targetDir, fileName);
   const tmp = `${absPath}.${process.pid}.tmp`;
@@ -131,9 +132,17 @@ async function writeSickNotePdfToPatientFiles(tenantCtx, patientId, note, buffer
 async function finalizeSickNote(tenantCtx, note, appDir) {
   // assemble presentation payload for PDF
   const patientRow = await tenantCtx.db.query(
-    `SELECT name, vorname, nachname, geburtsdatum, versichertennummer AS insurance_number, geschlecht
-       FROM patients WHERE tenant_id = $1 AND id = $2 LIMIT 1`,
-    [tenantCtx.id, Number(note.patient_id)]
+    `SELECT COALESCE(first_name || ' ' || last_name, '') AS name,
+            first_name,
+            first_name AS vorname,
+            last_name,
+            last_name AS nachname,
+            birth_date,
+            birth_date AS geburtsdatum,
+            ahv_number AS insurance_number,
+            ahv_number AS versichertennummer
+       FROM patients WHERE patient_id = $1 LIMIT 1`,
+    [note.patient_id]
   );
   const patient = patientRow.rows[0] || {};
   const receiver = { type: note.receiver_type, name: note.receiver_name, address: note.receiver_address };
@@ -143,14 +152,15 @@ async function finalizeSickNote(tenantCtx, note, appDir) {
   const pdf = await renderSickNotePdf(pdfPayload, cfg, appDir);
   const file = await writeSickNotePdfToPatientFiles(tenantCtx, note.patient_id, note, pdf.buffer);
 
+  const noteId = note.sick_note_id || note.id;
   const { rows } = await tenantCtx.db.query(
     `UPDATE sick_notes
-        SET status = 'FINAL', pdf_path = $3, updated_at = now()
-      WHERE tenant_id = $1 AND id = $2
-      RETURNING id, tenant_id, patient_id, created_at, updated_at, created_by_user_id,
+        SET status = 'FINAL', pdf_path = $2, updated_at = now()
+      WHERE sick_note_id = $1
+      RETURNING sick_note_id, sick_note_id AS id, patient_id, created_at, updated_at, created_by,
                 start_date, end_date, open_end, degree_percent, diagnosis_short, remark,
                 receiver_type, receiver_name, receiver_address, status, pdf_path, document_path`,
-    [tenantCtx.id, Number(note.id), file.relPath]
+    [noteId, file.relPath]
   );
   return { row: rows[0], file };
 }
@@ -162,4 +172,3 @@ module.exports = {
   updateSickNote,
   finalizeSickNote,
 };
-

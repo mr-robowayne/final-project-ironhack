@@ -1,7 +1,20 @@
-#!/bin/bash
-set -e
+#!/usr/bin/env bash
+set -euo pipefail
 
-# Navigiere zum Projekt-Root (damit git add .github und find terraform funktionieren)
+# =============================================================================
+# git-create-repo.sh — Neues GitHub Repo erstellen (sauberer Start)
+#
+# Was passiert:
+#   1. Altes .git entfernen (falls vorhanden)
+#   2. Neues Git-Repo initialisieren
+#   3. ALLES commiten (ein sauberer Initial Commit)
+#   4. Privates Repo auf GitHub erstellen + pushen
+#   5. Environments + Secrets konfigurieren (setup-all.sh)
+#
+# Verwendung:
+#   ./scripts/github/git-create-repo.sh
+# =============================================================================
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 cd "$PROJECT_ROOT"
@@ -9,50 +22,92 @@ cd "$PROJECT_ROOT"
 # --- KONFIGURATION ---
 GITHUB_USER="mr-robowayne"
 REPO_NAME="patientsync"
-AWS_REGION="eu-central-2"
-AWS_ROLE_ARN="arn:aws:iam::648786395667:role/patientsync-github-actions-role"
+REPO="${GITHUB_USER}/${REPO_NAME}"
 # ---------------------
 
-echo "🚀 Starte Setup für GitHub Repo: $GITHUB_USER/$REPO_NAME (PRIVATE)"
+echo ""
+echo "======================================================================"
+echo "  patientsync — Neues GitHub Repo erstellen"
+echo "======================================================================"
+echo "  Repo: ${REPO} (private)"
+echo "  Root: ${PROJECT_ROOT}"
+echo ""
 
-# 1. Repo erstellen (falls nicht existiert)
-if gh repo view "$GITHUB_USER/$REPO_NAME" >/dev/null 2>&1; then
-    echo "✅ Repo existiert bereits."
-else
-    echo "📦 Initialisiere Git & lade NUR Pipeline-Code hoch..."
-    
-    # 1. Git initialisieren
-    git init
-    
-    # 2. NUR Infrastruktur-Ordner hinzufügen (Kein App-Code!)
-    git add .github terraform scripts .gitignore
-    
-    git commit -m "Initial Infrastructure Setup"
-    gh repo create "$GITHUB_USER/$REPO_NAME" --private --source=. --remote=origin --push
+# ── Pruefungen ──────────────────────────────────────────────────────────────
+if ! command -v gh &>/dev/null; then
+  echo "[FEHLER] GitHub CLI nicht gefunden. Installieren mit: brew install gh"
+  exit 1
 fi
 
-# 2. Secrets setzen (für OIDC Login)
-echo "🔐 Setze Secrets..."
-gh secret set AWS_ROLE_ARN --body "$AWS_ROLE_ARN" --repo "$GITHUB_USER/$REPO_NAME"
+if ! gh auth status &>/dev/null; then
+  echo "[FEHLER] Nicht eingeloggt. Bitte zuerst: gh auth login"
+  exit 1
+fi
 
-# Automatische Suche aller variables.tfvars Dateien
-echo "🔍 Suche nach variables.tfvars Dateien..."
-find terraform -name "variables.tfvars" | while read file; do
-    dir=$(dirname "$file")
-    folder_name=$(basename "$dir")
-    # Erzeugt Secret-Namen wie TF_VARS_DEPLOY_AWS_RESSOURCES (Uppercase + Underscore)
-    secret_name="TF_VARS_$(echo "$folder_name" | tr '[:lower:]-' '[:upper:]_')"
-    echo "   👉 Lade hoch: $file -> Secret: $secret_name"
-    gh secret set "$secret_name" < "$file" --repo "$GITHUB_USER/$REPO_NAME"
-done
+# ── Warnung falls Repo schon existiert ──────────────────────────────────────
+if gh repo view "$REPO" &>/dev/null; then
+  echo "[WARN] Repo ${REPO} existiert bereits auf GitHub!"
+  echo "       Das Script wird es loeschen und neu erstellen."
+  echo ""
+  read -rp "  Repo loeschen und neu erstellen? [ja/N]: " CONFIRM
+  if [ "$CONFIRM" != "ja" ]; then
+    echo "[ABBRUCH] Nichts geaendert."
+    exit 0
+  fi
+  echo "  Loesche ${REPO}..."
+  gh repo delete "$REPO" --yes
+  echo "[OK] Altes Repo geloescht."
+  echo ""
+fi
 
-# 3. Variablen setzen (für Region)
-echo "🌍 Setze Variablen..."
-gh variable set AWS_REGION --body "$AWS_REGION" --repo "$GITHUB_USER/$REPO_NAME"
+# ── Altes .git entfernen ───────────────────────────────────────────────────
+if [ -d ".git" ]; then
+  echo "[INFO] Entferne altes .git Verzeichnis..."
+  rm -rf .git
+  echo "[OK] .git entfernt."
+fi
 
-# 4. Environments erstellen (für Protection Rules, falls nötig)
-# (Optional: GitHub erstellt Environments oft erst beim ersten Push automatisch, 
-# aber wir können sie hier vorbereiten, wenn du die Pro-Version hast)
+# ── Neues Git-Repo initialisieren ──────────────────────────────────────────
+echo "[INFO] Initialisiere neues Git-Repo..."
+git init -b main
+echo "[OK] Git initialisiert (branch: main)"
 
-echo "✅ Fertig! Repo ist bereit: https://github.com/$GITHUB_USER/$REPO_NAME"
-echo "👉 Du kannst jetzt 'git push' machen, um die Pipeline zu starten."
+# ── Alles commiten ─────────────────────────────────────────────────────────
+echo "[INFO] Stage alle Dateien..."
+git add .
+
+echo "[INFO] Pruefe was NICHT getrackt wird (.gitignore):"
+echo "       - *.tfvars (Terraform Secrets)"
+echo "       - **/vault.yml (Ansible Vault)"
+echo "       - *.env (Docker/App Secrets)"
+echo "       - db/flyway.conf (lokale DB Config)"
+echo ""
+
+git commit -m "initial commit"
+echo "[OK] Initial Commit erstellt."
+
+# ── Repo auf GitHub erstellen + pushen ─────────────────────────────────────
+echo "[INFO] Erstelle privates Repo auf GitHub..."
+gh repo create "$REPO" --private --source=. --remote=origin --push
+echo "[OK] Repo erstellt und gepusht: https://github.com/${REPO}"
+echo ""
+
+# ── Environments + Secrets konfigurieren ───────────────────────────────────
+echo "======================================================================"
+echo "  Secrets + Environments konfigurieren"
+echo "======================================================================"
+echo ""
+
+bash "${SCRIPT_DIR}/setup-all.sh"
+
+echo ""
+echo "======================================================================"
+echo "[OK] Alles fertig!"
+echo ""
+echo "  Repo:     https://github.com/${REPO}"
+echo "  Branch:   main"
+echo ""
+echo "  Naechste Schritte:"
+echo "  1. Pipeline triggern: git push / workflow_dispatch"
+echo "  2. Oder manuell: gh workflow run backend-build.yml"
+echo "======================================================================"

@@ -18,22 +18,22 @@ const yyyymmdd = (d) => {
 
 async function listLetters(tenantCtx, patientId) {
   const { rows } = await tenantCtx.db.query(
-    `SELECT id, tenant_id, patient_id, type, title, status, created_at, updated_at, created_by_user_id, pdf_path
+    `SELECT letter_id, letter_id AS id, patient_id, type, title, status, created_at, updated_at, created_by, pdf_path
        FROM letters
-      WHERE tenant_id = $1 AND patient_id = $2
-      ORDER BY created_at DESC, id DESC`,
-    [tenantCtx.id, Number(patientId)]
+      WHERE patient_id = $1
+      ORDER BY created_at DESC, letter_id DESC`,
+    [patientId]
   );
   return rows;
 }
 
 async function getLetter(tenantCtx, id) {
   const { rows } = await tenantCtx.db.query(
-    `SELECT id, tenant_id, patient_id, type, title, status, created_at, updated_at, created_by_user_id, content, pdf_path, document_path
+    `SELECT letter_id, letter_id AS id, patient_id, type, title, status, created_at, updated_at, created_by, content, pdf_path, document_path
        FROM letters
-      WHERE tenant_id = $1 AND id = $2
+      WHERE letter_id = $1
       LIMIT 1`,
-    [tenantCtx.id, Number(id)]
+    [id]
   );
   return rows[0] || null;
 }
@@ -43,10 +43,10 @@ async function createLetter(tenantCtx, payload, userId) {
   if (!patient_id) throw new Error('patient_id fehlt');
   if (!type) throw new Error('type fehlt');
   const { rows } = await tenantCtx.db.query(
-    `INSERT INTO letters (tenant_id, patient_id, type, title, status, created_by_user_id, content)
-     VALUES ($1, $2, $3, $4, 'DRAFT', $5, $6)
-     RETURNING id, tenant_id, patient_id, type, title, status, created_at, updated_at, created_by_user_id, content, pdf_path` ,
-    [tenantCtx.id, Number(patient_id), String(type), title || null, Number(userId) || null, content || {}]
+    `INSERT INTO letters (patient_id, type, title, status, created_by, content)
+     VALUES ($1, $2, $3, 'DRAFT', $4, $5)
+     RETURNING letter_id, letter_id AS id, patient_id, type, title, status, created_at, updated_at, created_by, content, pdf_path` ,
+    [patient_id, String(type), title || null, userId || null, content || {}]
   );
   return rows[0];
 }
@@ -55,7 +55,7 @@ async function updateLetter(tenantCtx, id, payload) {
   const existing = await getLetter(tenantCtx, id);
   if (!existing) throw new Error('Brief nicht gefunden');
   const fields = [];
-  const params = [tenantCtx.id, Number(id)];
+  const params = [id];
   let idx = params.length;
   if (payload.title !== undefined) { fields.push(`title = $${++idx}`); params.push(payload.title); }
   if (payload.type !== undefined) { fields.push(`type = $${++idx}`); params.push(payload.type); }
@@ -64,8 +64,8 @@ async function updateLetter(tenantCtx, id, payload) {
   if (!fields.length) return existing;
   const { rows } = await tenantCtx.db.query(
     `UPDATE letters SET ${fields.join(', ')}, updated_at = now()
-      WHERE tenant_id = $1 AND id = $2
-      RETURNING id, tenant_id, patient_id, type, title, status, created_at, updated_at, created_by_user_id, content, pdf_path`,
+      WHERE letter_id = $1
+      RETURNING letter_id, letter_id AS id, patient_id, type, title, status, created_at, updated_at, created_by, content, pdf_path`,
     params
   );
   return rows[0];
@@ -75,11 +75,11 @@ async function deleteLetter(tenantCtx, id) {
   const letter = await getLetter(tenantCtx, id);
   if (!letter) throw new Error('Brief nicht gefunden');
   if (String(letter.status).toUpperCase() === 'FINAL') {
-    throw new Error('Finalisierte Briefe können nicht gelöscht werden');
+    throw new Error('Finalisierte Briefe koennen nicht geloescht werden');
   }
   await tenantCtx.db.query(
-    `DELETE FROM letters WHERE tenant_id = $1 AND id = $2`,
-    [tenantCtx.id, Number(id)]
+    `DELETE FROM letters WHERE letter_id = $1`,
+    [id]
   );
   return { ok: true };
 }
@@ -91,7 +91,8 @@ async function writeLetterPdfToPatientFiles(tenantCtx, patientId, letter, buffer
   await fsp.mkdir(briefeDir, { recursive: true, mode: 0o750 });
   const type = sanitize(letter.type || 'BRIEF');
   const date = yyyymmdd(letter.created_at || Date.now());
-  const nameStem = `${type}_${date}_${letter.id}`;
+  const letterId = letter.letter_id || letter.id;
+  const nameStem = `${type}_${date}_${letterId}`;
   const fileName = `${nameStem}.pdf`;
   const absPath = path.join(briefeDir, fileName);
   const tmp = `${absPath}.${process.pid}.tmp`;
@@ -108,12 +109,13 @@ async function finalizeLetter(tenantCtx, letter, appDir) {
   const pdf = await renderLetterPdf(letter, cfg, appDir);
   const file = await writeLetterPdfToPatientFiles(tenantCtx, letter.patient_id, letter, pdf.buffer);
 
+  const letterId = letter.letter_id || letter.id;
   const { rows } = await tenantCtx.db.query(
     `UPDATE letters
-        SET status = 'FINAL', pdf_path = $3, updated_at = now()
-      WHERE tenant_id = $1 AND id = $2
-      RETURNING id, tenant_id, patient_id, type, title, status, created_at, updated_at, created_by_user_id, pdf_path` ,
-    [tenantCtx.id, Number(letter.id), file.relPath]
+        SET status = 'FINAL', pdf_path = $2, updated_at = now()
+      WHERE letter_id = $1
+      RETURNING letter_id, letter_id AS id, patient_id, type, title, status, created_at, updated_at, created_by, pdf_path` ,
+    [letterId, file.relPath]
   );
   return { row: rows[0], file };
 }

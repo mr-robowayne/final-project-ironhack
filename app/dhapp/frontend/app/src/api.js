@@ -25,8 +25,7 @@ try {
 }
 try {
   const storedUser = sessionStorage.getItem('userId');
-  const n = Number(storedUser);
-  if (Number.isFinite(n)) currentUserId = n;
+  if (storedUser) currentUserId = storedUser;
 } catch {
   currentUserId = null;
 }
@@ -47,8 +46,7 @@ export const setTenantId = (tenantId) => {
 export const getTenantId = () => currentTenantId;
 
 export const setUserId = (userId) => {
-  const n = Number(userId);
-  currentUserId = Number.isFinite(n) ? n : null;
+  currentUserId = userId ? String(userId) : null;
   try {
     if (currentUserId != null) sessionStorage.setItem('userId', String(currentUserId));
     else sessionStorage.removeItem('userId');
@@ -96,6 +94,66 @@ export async function apiFetch(path, opts = {}) {
   return res;
 }
 
+// ─── Flyway field-name mapping layer ───────────────────────────────────
+// Backend now uses English column names (Flyway schema). Frontend keeps
+// German names internally. These helpers translate both directions so that
+// API calls stay compatible without touching every form component.
+const DE_TO_EN = {
+  vorname:'first_name', nachname:'last_name', geburtsdatum:'birth_date',
+  geschlecht:'sex', telefonnummer:'phone', adresse:'street',
+  hausnummer:'house_number', plz:'postal_code', ort:'city',
+  allergien:'allergies', impfstatus:'vaccination_status',
+  krankengeschichte:'medical_history', medikationsplan:'medication_plan',
+  versichertennummer:'insurance_number', ahv_nummer:'ahv_number',
+  krankenkasse:'insurance_name', krankenkasse_name:'insurance_name',
+  krankenkasse_adresse:'insurance_address',
+  guardian_adresse:'guardian_street', guardian_hausnummer:'guardian_house_number',
+  guardian_plz:'guardian_postal_code', guardian_ort:'guardian_city',
+};
+const EN_TO_DE = {};
+for (const [de,en] of Object.entries(DE_TO_EN)) { if (!EN_TO_DE[en]) EN_TO_DE[en] = de; }
+
+const isPatientPath = (p) => /\/api\/patients\b/i.test(p) || /\/api\/rezept\b/i.test(p);
+
+function mapOutgoing(obj) {
+  if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return obj;
+  const out = { ...obj };
+  for (const [key,val] of Object.entries(obj)) {
+    const eng = DE_TO_EN[key];
+    if (eng && !(eng in out)) out[eng] = val;
+  }
+  return out;
+}
+function mapIncoming(obj) {
+  if (!obj || typeof obj !== 'object') return obj;
+  if (Array.isArray(obj)) return obj.map(mapIncoming);
+  const out = { ...obj };
+  for (const [key,val] of Object.entries(obj)) {
+    const de = EN_TO_DE[key];
+    if (de && !(de in out)) out[de] = val;
+  }
+  return out;
+}
+function mapBody(body, path) {
+  if (!isPatientPath(path) || !body || typeof body !== 'object' || body instanceof FormData) return body;
+  let mapped = mapOutgoing(body);
+  if (mapped.patientData && typeof mapped.patientData === 'object') {
+    mapped = { ...mapped, patientData: mapOutgoing(mapped.patientData) };
+  }
+  return mapped;
+}
+function mapResponse(data, path) {
+  if (!isPatientPath(path)) return data;
+  if (Array.isArray(data)) return data.map(mapIncoming);
+  if (data && typeof data === 'object') {
+    const m = mapIncoming(data);
+    if (m.patient) m.patient = mapIncoming(m.patient);
+    if (Array.isArray(m.items)) m.items = m.items.map(mapIncoming);
+    return m;
+  }
+  return data;
+}
+
 // Axios-ähnliches Minimal-Wrapper-API, wie in App.js erwartet
 const parseJson = async (res) => {
   const ct = res.headers.get('content-type') || '';
@@ -107,27 +165,30 @@ const parseJson = async (res) => {
 const api = {
   async get(path, opts = {}) {
     const res = await apiFetch(path, { method: 'GET', ...opts });
-    const data = await parseJson(res);
+    const data = mapResponse(await parseJson(res), path);
     return { data, status: res.status, ok: res.ok };
   },
   async post(path, body, opts = {}) {
-    const res = await apiFetch(path, { method: 'POST', body: body && !(body instanceof FormData) ? JSON.stringify(body) : body, ...opts });
-    const data = await parseJson(res);
+    const mapped = mapBody(body, path);
+    const res = await apiFetch(path, { method: 'POST', body: mapped && !(mapped instanceof FormData) ? JSON.stringify(mapped) : mapped, ...opts });
+    const data = mapResponse(await parseJson(res), path);
     return { data, status: res.status, ok: res.ok };
   },
   async put(path, body, opts = {}) {
-    const res = await apiFetch(path, { method: 'PUT', body: body && !(body instanceof FormData) ? JSON.stringify(body) : body, ...opts });
-    const data = await parseJson(res);
+    const mapped = mapBody(body, path);
+    const res = await apiFetch(path, { method: 'PUT', body: mapped && !(mapped instanceof FormData) ? JSON.stringify(mapped) : mapped, ...opts });
+    const data = mapResponse(await parseJson(res), path);
     return { data, status: res.status, ok: res.ok };
   },
   async patch(path, body, opts = {}) {
-    const res = await apiFetch(path, { method: 'PATCH', body: body && !(body instanceof FormData) ? JSON.stringify(body) : body, ...opts });
-    const data = await parseJson(res);
+    const mapped = mapBody(body, path);
+    const res = await apiFetch(path, { method: 'PATCH', body: mapped && !(mapped instanceof FormData) ? JSON.stringify(mapped) : mapped, ...opts });
+    const data = mapResponse(await parseJson(res), path);
     return { data, status: res.status, ok: res.ok };
   },
   async delete(path, opts = {}) {
     const res = await apiFetch(path, { method: 'DELETE', ...opts });
-    const data = await parseJson(res);
+    const data = mapResponse(await parseJson(res), path);
     return { data, status: res.status, ok: res.ok };
   }
 };
@@ -340,11 +401,11 @@ export async function resolvePatient(params) {
     }
     const qs = new URLSearchParams();
     const map = {
-      vorname: params?.vorname,
-      nachname: params?.nachname,
-      adresse: params?.adresse,
+      vorname: params?.vorname, first_name: params?.vorname,
+      nachname: params?.nachname, last_name: params?.nachname,
+      adresse: params?.adresse, street: params?.adresse,
       versichertennummer: params?.versichertennummer || params?.insurance_number,
-      insurance_number: params?.insurance_number,
+      insurance_number: params?.insurance_number || params?.versichertennummer,
     };
     Object.entries(map).forEach(([k, v]) => {
       if (v != null && String(v).trim().length) qs.set(k, String(v).trim());
@@ -565,7 +626,7 @@ export async function sendChatTyping(channelId) {
 
 // Direct messages
 export async function startDM(userId) {
-  const res = await api.post('/api/chat/dm/start', { user_id: Number(userId) });
+  const res = await api.post('/api/chat/dm/start', { user_id: String(userId) });
   return res?.data || null;
 }
 export async function listDMs() {

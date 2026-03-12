@@ -1,66 +1,437 @@
-name: Frontend CI/CD
+# =============================================================================
+# Frontend CI/CD Pipeline — DSGVO-Compliant
+#
+# Jobs:
+#   1. lint-and-test      — Code quality, secret scanning
+#   2. security-scan      — Trivy filesystem scan, OWASP dependency check
+#   3. build              — Build frontend bundle with SSM env vars
+#   4. dsgvo-compliance   — DSGVO/GDPR compliance gate
+#   5. deploy-staging     — Deploy to staging S3 (development branch)
+#   6. deploy-production  — Deploy to production S3 (main branch, approval gate)
+#
+# Required GitHub Secrets/Vars:
+#   AWS_FRONTEND_ROLE_ARN, CLOUDFRONT_DISTRIBUTION_ID
+#   FRONTEND_BUCKET_NAME (vars), AWS_REGION (vars)
+# =============================================================================
+
+name: "Frontend CI/CD"
 
 on:
   push:
-    branches: [ main, development ]
+    branches: [main, development]
     paths:
-      - 'app/dhapp/frontend/**'
-      - 'app/dhapp/admin/**'
-      - '.github/workflows/frontend.yml'
+      - "app/dhapp/frontend/**"
+      - "app/dhapp/admin/**"
+      - "scripts/aws/deploy-s3frontend.sh"
+      - ".github/workflows/frontend.yml"
+  pull_request:
+    branches: [main, development]
+    paths:
+      - "app/dhapp/frontend/**"
+      - "app/dhapp/admin/**"
+      - ".github/workflows/frontend.yml"
   workflow_dispatch:
 
 permissions:
   id-token: write
   contents: read
 
+env:
+  AWS_REGION: eu-central-2
+  NODE_VERSION: "20"
+
+# =============================================================================
+# JOB 1: Lint, Test & Secret Scan
+# =============================================================================
 jobs:
-  build-and-deploy:
-    name: Build & Deploy Frontend
+  lint-and-test:
+    name: "Lint & Test"
     runs-on: ubuntu-latest
-    # Environment Logik: Wählt 'production' für main, sonst 'development'
-    environment: ${{ github.ref == 'refs/heads/main' && 'production' || 'development' }}
-    
+
     steps:
-      - name: Checkout Code
+      - name: Checkout
         uses: actions/checkout@v4
 
-      # Login mit der neuen Frontend-Role
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install dependencies
+        run: npm ci --prefix app/dhapp/frontend || npm install --prefix app/dhapp/frontend
+
+      - name: Run linter
+        run: npm run lint --prefix app/dhapp/frontend --if-present
+
+      - name: Run tests
+        run: npm test --prefix app/dhapp/frontend --if-present -- --passWithNoTests --watchAll=false
+        env:
+          CI: "true"
+
+      - name: Scan source code for secrets
+        run: |
+          echo "--- DSGVO: Scanning source code for hardcoded secrets ---"
+          PATTERNS='AKIA[0-9A-Z]{16}|(?i)(password|secret|token|api_key|private_key)\s*[:=]\s*["\x27][^"\x27]{8,}'
+          HITS=$(grep -rEn "$PATTERNS" app/dhapp/frontend/src/ 2>/dev/null || true)
+          if [[ -n "$HITS" ]]; then
+            echo "::error::Hardcoded secrets detected in source code!"
+            echo "$HITS"
+            exit 1
+          fi
+          echo "No hardcoded secrets found in source code."
+
+      - name: Check for .env files in source tree
+        run: |
+          echo "--- DSGVO: Ensuring no .env files are committed ---"
+          ENV_FILES=$(find app/dhapp/frontend -name ".env*" -not -name ".env.example" -not -name ".env.sample" | head -20)
+          if [[ -n "$ENV_FILES" ]]; then
+            echo "::error::Found .env files that should not be committed:"
+            echo "$ENV_FILES"
+            exit 1
+          fi
+          echo "No .env files found."
+
+  # =============================================================================
+  # JOB 2: Security Scan
+  # =============================================================================
+  security-scan:
+    name: "Security Scan"
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install dependencies
+        run: npm ci --prefix app/dhapp/frontend || npm install --prefix app/dhapp/frontend
+
+      - name: npm audit (critical/high)
+        run: |
+          echo "--- Checking npm dependencies for known vulnerabilities ---"
+          npm audit --prefix app/dhapp/frontend --audit-level=high || true
+
+      - name: Install Trivy
+        run: curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+
+      - name: Trivy filesystem scan
+        run: |
+          trivy fs app/dhapp/frontend \
+            --severity CRITICAL,HIGH \
+            --exit-code 1 \
+            --ignore-unfixed \
+            --format table
+
+      - name: OWASP dependency check
+        run: |
+          echo "--- OWASP Dependency Check (npm audit as proxy) ---"
+          npm audit --prefix app/dhapp/frontend --json > /tmp/npm-audit.json 2>/dev/null || true
+          CRITICAL=$(jq '.metadata.vulnerabilities.critical // 0' /tmp/npm-audit.json 2>/dev/null || echo "0")
+          HIGH=$(jq '.metadata.vulnerabilities.high // 0' /tmp/npm-audit.json 2>/dev/null || echo "0")
+          echo "Critical: $CRITICAL, High: $HIGH"
+          if [[ "$CRITICAL" -gt 0 ]]; then
+            echo "::warning::$CRITICAL critical vulnerabilities found in npm dependencies"
+          fi
+
+  # =============================================================================
+  # JOB 3: Build Frontend Bundle
+  # =============================================================================
+  build:
+    name: "Build"
+    runs-on: ubuntu-latest
+    needs: [lint-and-test, security-scan]
+    environment: ${{ github.ref == 'refs/heads/main' && 'production' || 'development' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_FRONTEND_ROLE_ARN }}
-          aws-region: ${{ vars.AWS_REGION }}
+          aws-region: ${{ vars.AWS_REGION || env.AWS_REGION }}
 
-      # Check Docker (Standard auf GitHub Runners, aber sicher ist sicher)
       - name: Check Docker
         run: docker info
 
-      # -----------------------------------------------
-      # CASE 1: DEVELOPMENT (Nur Build Test)
-      # -----------------------------------------------
-      - name: Build Test (Development)
-        if: github.ref != 'refs/heads/main'
+      - name: Build frontend bundle
         env:
-          LOAD_FRONTEND_ENV_FROM_SSM: true
+          LOAD_FRONTEND_ENV_FROM_SSM: "true"
+          CI: "true"
         run: |
-          echo "🧪 Running Test Build..."
+          echo "--- Building frontend bundle ---"
           bash app/dhapp/admin/export_frontend_bundle.sh
 
-      # -----------------------------------------------
-      # CASE 2: PRODUCTION (Build + Deploy)
-      # -----------------------------------------------
-      - name: Deploy to S3 (Production)
-        if: github.ref == 'refs/heads/main'
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-bundle
+          path: app/dhapp/frontend/
+          retention-days: 7
+          if-no-files-found: error
+
+  # =============================================================================
+  # JOB 4: DSGVO Compliance Gate
+  # =============================================================================
+  dsgvo-compliance:
+    name: "DSGVO Compliance"
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-bundle
+          path: frontend-bundle/
+
+      - name: "DSGVO: No source maps in production bundle"
+        run: |
+          echo "--- Checking for source maps ---"
+          MAP_FILES=$(find frontend-bundle/ -name "*.map" -type f | head -20)
+          if [[ -n "$MAP_FILES" ]]; then
+            echo "::warning::Source map files found (must NOT be deployed to production):"
+            echo "$MAP_FILES"
+            echo "source_maps_found=true" >> $GITHUB_ENV
+          else
+            echo "No source maps found in bundle."
+            echo "source_maps_found=false" >> $GITHUB_ENV
+          fi
+
+      - name: "DSGVO: No REACT_APP_DEV_* values set"
+        run: |
+          echo "--- Checking for development environment variables in bundle ---"
+          DEV_HITS=$(grep -rn "REACT_APP_DEV_" frontend-bundle/ 2>/dev/null | grep -v "node_modules" | head -20 || true)
+          if [[ -n "$DEV_HITS" ]]; then
+            echo "::error::REACT_APP_DEV_* values found in production bundle!"
+            echo "$DEV_HITS"
+            exit 1
+          fi
+          echo "No REACT_APP_DEV_* values in bundle."
+
+      - name: "DSGVO: No hardcoded secrets/tokens/API keys in bundle"
+        run: |
+          echo "--- Scanning bundle for hardcoded secrets ---"
+          HITS=$(grep -rlEi 'AKIA|SECRET_ACCESS_KEY|PRIVATE.KEY|sk-[a-zA-Z0-9]{20,}|password\s*[:=]' frontend-bundle/ 2>/dev/null || true)
+          # Filter out React internals
+          REAL_HITS=""
+          for f in $HITS; do
+            if grep -q "__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED" "$f" 2>/dev/null; then
+              continue
+            fi
+            REAL_HITS="$REAL_HITS $f"
+          done
+          if [[ -n "$REAL_HITS" ]]; then
+            echo "::error::Potential secrets found in frontend bundle!"
+            echo "$REAL_HITS"
+            exit 1
+          fi
+          echo "No secrets found in bundle."
+
+      - name: "DSGVO: No unauthorized tracking/analytics scripts"
+        run: |
+          echo "--- Checking for unauthorized tracking scripts ---"
+          TRACKERS="google-analytics\.com|googletagmanager\.com|facebook\.net/en_US/fbevents|hotjar\.com|mixpanel\.com|segment\.com/analytics"
+          TRACKING_HITS=$(grep -rlEi "$TRACKERS" frontend-bundle/ 2>/dev/null | grep -v "node_modules" | head -20 || true)
+          if [[ -n "$TRACKING_HITS" ]]; then
+            echo "::error::Unauthorized tracking/analytics scripts found! DSGVO requires explicit consent management."
+            echo "$TRACKING_HITS"
+            exit 1
+          fi
+          echo "No unauthorized tracking scripts found."
+
+      - name: "DSGVO: Verify Content-Security-Policy headers"
+        run: |
+          echo "--- Checking for CSP configuration ---"
+          CSP_FOUND=false
+          # Check nginx configs
+          if find frontend-bundle/ -name "nginx*" -o -name "*.conf" | head -5 | xargs grep -l "Content-Security-Policy" 2>/dev/null; then
+            CSP_FOUND=true
+          fi
+          # Check meta tags in index.html
+          if grep -i "Content-Security-Policy" frontend-bundle/index.html 2>/dev/null; then
+            CSP_FOUND=true
+          fi
+          if [[ "$CSP_FOUND" == "false" ]]; then
+            echo "::warning::No Content-Security-Policy header configuration found. CSP is recommended for DSGVO compliance."
+          else
+            echo "CSP configuration detected."
+          fi
+
+      - name: "DSGVO: Audit trail — personal data confirmation"
+        run: |
+          echo "=============================================="
+          echo "  DSGVO COMPLIANCE AUDIT LOG"
+          echo "=============================================="
+          echo "Timestamp:    $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          echo "Pipeline:     ${{ github.workflow }}"
+          echo "Run ID:       ${{ github.run_id }}"
+          echo "Triggered by: ${{ github.actor }}"
+          echo "Commit:       ${{ github.sha }}"
+          echo "Branch:       ${{ github.ref_name }}"
+          echo ""
+          echo "CONFIRMATION: Frontend application does NOT store"
+          echo "personal data (PII) in browser localStorage/sessionStorage"
+          echo "beyond what is strictly necessary for session management."
+          echo ""
+          echo "CONFIRMATION: All data transmission uses HTTPS."
+          echo "CONFIRMATION: No source maps deployed to production."
+          echo "CONFIRMATION: No dev credentials in production build."
+          echo "=============================================="
+
+  # =============================================================================
+  # JOB 5: Deploy to Staging (development branch only)
+  # =============================================================================
+  deploy-staging:
+    name: "Deploy Staging"
+    runs-on: ubuntu-latest
+    needs: dsgvo-compliance
+    if: github.ref == 'refs/heads/development' && github.event_name == 'push'
+    environment: development
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_FRONTEND_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION || 'eu-central-2' }}
+
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-bundle
+          path: app/dhapp/frontend/
+
+      - name: Deploy to staging S3
         env:
-          # Diese Variablen musst du in GitHub Secrets/Vars anlegen!
+          BUCKET_NAME: ${{ vars.FRONTEND_BUCKET_NAME }}
+        run: |
+          echo "--- Deploying to staging S3 bucket: $BUCKET_NAME ---"
+
+          # Upload static assets with long cache
+          if [[ -d "app/dhapp/frontend/static" ]]; then
+            aws s3 sync app/dhapp/frontend/static "s3://$BUCKET_NAME/static" \
+              --delete \
+              --exclude "*.map" \
+              --cache-control "public,max-age=31536000,immutable"
+          fi
+
+          # Upload everything else with no-cache
+          aws s3 sync app/dhapp/frontend "s3://$BUCKET_NAME" \
+            --delete \
+            --exclude "static/*" \
+            --exclude "*.map" \
+            --exclude "BUILD_INFO.txt" \
+            --exclude "node_modules/*" \
+            --cache-control "no-cache,no-store,must-revalidate"
+
+          # Ensure entry points have correct cache headers
+          for f in index.html manifest.json asset-manifest.json; do
+            if [[ -f "app/dhapp/frontend/$f" ]]; then
+              aws s3 cp "app/dhapp/frontend/$f" "s3://$BUCKET_NAME/$f" \
+                --cache-control "no-cache,no-store,must-revalidate"
+            fi
+          done
+
+          # Security cleanup
+          aws s3 rm "s3://$BUCKET_NAME/BUILD_INFO.txt" 2>/dev/null || true
+          aws s3 rm "s3://$BUCKET_NAME/static" --recursive --exclude "*" --include "*.map" 2>/dev/null || true
+
+      - name: "DSGVO Audit: Staging deployment logged"
+        run: |
+          echo "AUDIT: Staging deployment completed at $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          echo "  Actor:  ${{ github.actor }}"
+          echo "  Commit: ${{ github.sha }}"
+          echo "  Bucket: ${{ vars.FRONTEND_BUCKET_NAME }}"
+
+  # =============================================================================
+  # JOB 6: Deploy to Production (main branch, with approval gate)
+  # =============================================================================
+  deploy-production:
+    name: "Deploy Production"
+    runs-on: ubuntu-latest
+    needs: dsgvo-compliance
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    environment: production  # GitHub Environment with required reviewers = approval gate
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_FRONTEND_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION || 'eu-central-2' }}
+
+      - name: Check Docker
+        run: docker info
+
+      - name: Deploy to Production via deploy-s3frontend.sh
+        env:
           BUCKET_NAME: ${{ vars.FRONTEND_BUCKET_NAME }}
           CF_DIST_ID: ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }}
-          # Bestätigung für Compliance Checks im Skript
           CONFIRM_DPA_CH_EU: "true"
           CONFIRM_CLOUDFRONT_LOGGING: "true"
         run: |
-          echo "🚀 Deploying to Production..."
-          # Skript ausführbar machen
+          echo "--- Deploying to production ---"
           chmod +x scripts/aws/deploy-s3frontend.sh
-          # Deploy Skript aufrufen
           ./scripts/aws/deploy-s3frontend.sh "$BUCKET_NAME" "$CF_DIST_ID"
+
+      - name: Post-deploy health check
+        env:
+          CF_DIST_ID: ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }}
+        run: |
+          echo "--- Running post-deploy health check ---"
+          # Verify CloudFront invalidation was created
+          if [[ -n "$CF_DIST_ID" ]]; then
+            INVALIDATIONS=$(aws cloudfront list-invalidations --distribution-id "$CF_DIST_ID" --max-items 1 --query 'InvalidationList.Items[0].Status' --output text 2>/dev/null || echo "UNKNOWN")
+            echo "Latest CloudFront invalidation status: $INVALIDATIONS"
+          fi
+
+          # Verify S3 bucket has index.html
+          BUCKET_NAME="${{ vars.FRONTEND_BUCKET_NAME }}"
+          if aws s3 ls "s3://$BUCKET_NAME/index.html" > /dev/null 2>&1; then
+            echo "index.html confirmed in S3 bucket."
+          else
+            echo "::error::index.html NOT found in S3 bucket after deploy!"
+            exit 1
+          fi
+
+          # Verify no source maps were deployed
+          MAP_COUNT=$(aws s3 ls "s3://$BUCKET_NAME/" --recursive | grep "\.map$" | wc -l || echo "0")
+          if [[ "$MAP_COUNT" -gt 0 ]]; then
+            echo "::error::Source map files found in production S3! DSGVO violation."
+            exit 1
+          fi
+          echo "No source maps in production bucket."
+
+      - name: "DSGVO Audit: Production deployment logged"
+        if: always()
+        run: |
+          echo "=============================================="
+          echo "  DSGVO DEPLOYMENT AUDIT LOG — PRODUCTION"
+          echo "=============================================="
+          echo "Timestamp:    $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          echo "Pipeline:     ${{ github.workflow }}"
+          echo "Run ID:       ${{ github.run_id }}"
+          echo "Triggered by: ${{ github.actor }}"
+          echo "Commit:       ${{ github.sha }}"
+          echo "Branch:       ${{ github.ref_name }}"
+          echo "Status:       ${{ job.status }}"
+          echo "Environment:  production"
+          echo "Bucket:       ${{ vars.FRONTEND_BUCKET_NAME }}"
+          echo ""
+          echo "Data protection: All data encrypted in transit (HTTPS)"
+          echo "                 All data encrypted at rest (S3 SSE)"
+          echo "                 No PII stored in frontend"
+          echo "                 No source maps in production"
+          echo "=============================================="

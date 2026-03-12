@@ -93,13 +93,13 @@ setInterval(async () => {
         continue;
       }
       try {
-        await ctx.db.query(`DELETE FROM calendar_audit_logs WHERE tenant_id = $1 AND created_at < $2`, [ctx.id, cutoff]);
+        await ctx.db.query(`DELETE FROM calendar_audit_logs WHERE created_at < $1`, [cutoff]);
       } catch {}
       try {
-        await ctx.db.query(`DELETE FROM tenant_logs WHERE tenant_id = $1 AND created_at < $2`, [ctx.id, cutoff]);
+        await ctx.db.query(`DELETE FROM tenant_logs WHERE created_at < $1`, [cutoff]);
       } catch {}
       try {
-        await ctx.db.query(`DELETE FROM tenant_logs WHERE tenant_id = $1 AND ts < $2`, [ctx.id, cutoff]);
+        await ctx.db.query(`DELETE FROM tenant_logs WHERE ts < $1`, [cutoff]);
       } catch {}
     }
   } catch {}
@@ -404,27 +404,23 @@ const clientMeta = (req) => ({
 });
 const invoiceToDto = (row) => {
   if (!row) return null;
-  const pdfUrl = row.storage_path ? `/api/invoices/${encodeURIComponent(row.id)}/pdf` : null;
-  const pdfViewUrl = row.storage_path ? `/api/invoices/${encodeURIComponent(row.id)}/pdf/view` : null;
+  const invoiceId = row.invoice_id || row.id;
   return {
-    id: row.id,
-    tenant_id: row.tenant_id,
+    id: invoiceId,
+    invoice_id: invoiceId,
     patient_id: row.patient_id,
     status: row.status,
-    total_amount: row.total ?? row.total_amount,
+    total_amount: row.total ?? row.amount,
     currency: row.currency,
-    filesize: row.filesize,
-    pdf_checksum: row.pdf_checksum,
     created_by: row.created_by,
-    created_by_user_id: row.created_by_user_id,
-    doctor_id: row.doctor_id,
     created_at: row.created_at,
     updated_at: row.updated_at,
-    pdf_generated_at: row.pdf_generated_at,
-    has_pdf: Boolean(row.storage_path),
-    pdf_url: pdfUrl,
-    pdf_view_url: pdfViewUrl,
-    payload: row.payload
+    medidata_ref: row.medidata_ref,
+    due_date: row.due_date,
+    sent_at: row.sent_at,
+    paid_at: row.paid_at,
+    pdf_url: `/api/invoices/${encodeURIComponent(invoiceId)}/pdf`,
+    pdf_view_url: `/api/invoices/${encodeURIComponent(invoiceId)}/pdf/view`,
   };
 };
 const parseAddress = (row, column = 'address', fallbackKeys = null) => {
@@ -458,7 +454,7 @@ const parseAddress = (row, column = 'address', fallbackKeys = null) => {
 };
 const deriveName = (row) => {
   if (row?.name) return row.name;
-  const parts = [row?.vorname, row?.nachname].filter(Boolean);
+  const parts = [row?.first_name || row?.vorname, row?.last_name || row?.nachname].filter(Boolean);
   return parts.join(' ').trim() || null;
 };
 const cleanString = (val) => {
@@ -639,43 +635,51 @@ const toPatientDto = (row) => {
   const address = parseAddress(row);
   const guardian = parseGuardianFromRow(row);
   return {
-    id: row.id,
-    tenant_id: row.tenant_id,
+    id: row.patient_id || row.id,
+    patient_id: row.patient_id || row.id,
     name: deriveName(row),
-    birthdate: row.birthdate || row.geburtsdatum,
-    gender: row.gender || row.geschlecht,
+    birthdate: row.birth_date || row.birthdate || row.geburtsdatum,
+    birth_date: row.birth_date || row.birthdate || row.geburtsdatum,
+    gender: row.gender || row.geschlecht || row.sex || null,
     treated_sex: row.treated_sex || null,
-    insurance: row.insurance || row.krankenkasse,
-    insurance_number: row.insurance_number || row.versichertennummer,
-    doctor_id: row.doctor_id,
+    insurance: row.insurance || row.krankenkasse || null,
+    insurance_number: row.ahv_number || row.insurance_number || row.versichertennummer,
+    ahv_number: row.ahv_number || row.insurance_number || row.versichertennummer,
+    doctor_id: row.doctor_id || null,
     doctor_name: row.doctor_name || null,
     doctor_email: row.doctor_email || null,
     phone: row.phone || row.telefonnummer,
     email: row.email,
+    external_ref: row.external_ref || null,
     address,
     notes: row.notes || row.krankengeschichte || '',
+    created_by: row.created_by || null,
     created_at: row.created_at,
     updated_at: row.updated_at,
-    vorname: row.vorname,
-    nachname: row.nachname,
-    krankengeschichte: row.krankengeschichte,
-    medikationsplan: row.medikationsplan || null,
-    allergien: row.allergien || null,
-    impfstatus: row.impfstatus || null,
-    telefonnummer: row.telefonnummer,
+    deleted_at: row.deleted_at || null,
+    document_prefix: row.document_prefix || null,
+    vorname: row.first_name || row.vorname,
+    nachname: row.last_name || row.nachname,
+    first_name: row.first_name || row.vorname,
+    last_name: row.last_name || row.nachname,
+    krankengeschichte: row.krankengeschichte || row.medical_history || null,
+    medikationsplan: row.medikationsplan || row.medication_plan || null,
+    allergien: row.allergien || row.allergies || null,
+    impfstatus: row.impfstatus || row.vaccination_status || null,
+    telefonnummer: row.phone || row.telefonnummer,
     vorgesetzter: row.vorgesetzter || null,
 
     // Legacy/UI-expected aliases for compatibility
-    geburtsdatum: row.geburtsdatum || row.birthdate || null,
-    geschlecht: row.geschlecht || row.gender || null,
-    adresse: row.adresse || address.street || null,
-    hausnummer: row.hausnummer || address.houseNo || null,
-    plz: row.plz || address.zip || null,
-    ort: row.ort || address.city || null,
-    ahv_nummer: row.ahv_nummer || null,
-    krankenkasse: row.krankenkasse || row.insurance || null,
-    krankenkasse_adresse: row.krankenkasse_adresse || null,
-    versichertennummer: row.versichertennummer || row.insurance_number || null,
+    geburtsdatum: row.birth_date || row.geburtsdatum || row.birthdate || null,
+    geschlecht: row.sex || row.geschlecht || row.gender || null,
+    adresse: row.street || row.adresse || address.street || null,
+    hausnummer: row.house_number || row.hausnummer || address.houseNo || null,
+    plz: row.postal_code || row.plz || address.zip || null,
+    ort: row.city || row.ort || address.city || null,
+    ahv_nummer: row.ahv_number || row.ahv_nummer || null,
+    krankenkasse: row.insurance_name || row.krankenkasse || row.insurance || null,
+    krankenkasse_adresse: row.insurance_address || row.krankenkasse_adresse || null,
+    versichertennummer: row.insurance_number || row.versichertennummer || null,
 
     // New: linked insurance details when joined
     insurance_id: row.insurance_id || null,
@@ -739,8 +743,8 @@ const provisionPatientStorage = async (tenantCtx, patientId) => {
   const prefix = s3docs.buildPatientPrefix(tenantCtx.id, String(patientId));
   try {
     await tenantCtx.db.query(
-      `UPDATE patients SET document_prefix = $1 WHERE id = $2 AND tenant_id = $3`,
-      [prefix, patientId, tenantCtx.id]
+      `UPDATE patients SET document_prefix = $1 WHERE patient_id = $2`,
+      [prefix, patientId]
     );
   } catch (err) {
     // Column may not exist in legacy schema — not fatal
@@ -751,58 +755,58 @@ const provisionPatientStorage = async (tenantCtx, patientId) => {
 };
 const toAppointmentDto = (row) => {
   if (!row) return null;
-  const startsAt = row.starts_at || (row.termin_datum && row.startzeit ? `${row.termin_datum}T${row.startzeit}` : null);
+  const startsAt = row.start_at || row.starts_at || null;
   const startsDate = startsAt ? new Date(startsAt) : null;
-  const duration = Number(row.duration_minutes || row.dauer || 30);
-  const endsDate = startsDate ? new Date(startsDate.getTime() + duration * 60000) : null;
+  const endsAt = row.end_at || null;
+  const endsDate = endsAt ? new Date(endsAt) : (startsDate ? new Date(startsDate.getTime() + 30 * 60000) : null);
+  const duration = startsDate && endsDate ? Math.round((endsDate.getTime() - startsDate.getTime()) / 60000) : 30;
   return {
-    id: row.id,
-    tenant_id: row.tenant_id,
+    id: row.appointment_id,
+    appointment_id: row.appointment_id,
     calendar_id: row.calendar_id,
     patient_id: row.patient_id,
-    doctor_id: row.doctor_id,
+    created_by: row.created_by,
+    title: row.title,
     starts_at: startsDate ? startsDate.toISOString() : null,
     ends_at: endsDate ? endsDate.toISOString() : null,
+    start_at: startsDate ? startsDate.toISOString() : null,
+    end_at: endsDate ? endsDate.toISOString() : null,
     duration_minutes: duration,
-    reason: row.reason || row.beschreibung || row.termin_name,
+    reason: row.title,
+    room_id: row.room_id || null,
     status: row.status || 'scheduled',
+    medidata_ref: row.medidata_ref || null,
     patient_name: row.patient_name || deriveName(row),
     doctor_name: row.doctor_name || null,
     doctor_email: row.doctor_email || null,
-    metadata: {
-      legacy: {
-        termin_name: row.termin_name,
-        beschreibung: row.beschreibung,
-        startzeit: row.startzeit,
-        endzeit: row.endzeit,
-        termin_datum: row.termin_datum
-      }
-    }
+    created_at: row.created_at || null,
+    updated_at: row.updated_at || null,
   };
 };
 const toPublicUser = (userRow) => {
   if (!userRow) return null;
   const {
     password_hash,
-    beschreibung,
-    rolle,
     metadata,
     ...rest
   } = userRow;
-  const normalizedRole = normalizeAuthRole(userRow.role || rolle || 'assistant');
+  const normalizedRole = normalizeAuthRole(userRow.role || userRow.rolle || 'assistant');
   const displayName =
-    (userRow.name || `${userRow.vorname || ''} ${userRow.nachname || ''}`.trim() || userRow.username || '').trim()
+    (userRow.displayName || userRow.display_name || userRow.name || `${userRow.first_name || userRow.vorname || ''} ${userRow.last_name || userRow.nachname || ''}`.trim() || '').trim()
     || (String(userRow.email || '').split('@')[0] || 'User');
   const nameTokens = displayName.split(/[\s._-]+/g).filter(Boolean);
-  const initials = (
+  const initials = userRow.initials || (
     nameTokens.length >= 2
       ? `${nameTokens[0][0] || ''}${nameTokens[nameTokens.length - 1][0] || ''}`
       : (nameTokens[0] || '').slice(0, 2)
   ).toUpperCase() || 'U';
   return {
     ...rest,
+    id: userRow.user_id || userRow.id,
     role: normalizedRole,
-    beschreibung: beschreibung || '',
+    rolle: normalizedRole,
+    vorname: userRow.first_name || userRow.vorname || null,
+    nachname: userRow.last_name || userRow.nachname || null,
     metadata: metadata || {},
     displayName,
     initials,
@@ -1094,10 +1098,10 @@ async function resolveIdentifierEmail(tenantCtx, identifier) {
   const { rows } = await tenantCtx.db.query(
     `SELECT email
        FROM users
-      WHERE tenant_id = $1
-        AND (lower(email) = $2 OR lower(username) = $2)
+      WHERE lower(email) = $1
+        AND deleted_at IS NULL
       LIMIT 1`,
-    [tenantCtx.id, normalized]
+    [normalized]
   );
   return String(rows[0]?.email || '').trim().toLowerCase() || null;
 }
@@ -1108,7 +1112,7 @@ async function findTenantAuthUserByEmail(tenantCtx, email) {
   const schema = quoteSchemaIdent(tenantCtx?.schemaName || `tenant_${tenantCtx?.id}`, tenantCtx?.id);
   const { rows } = await tenantCtx.db.query(
     `SELECT u.user_id,
-            u.legacy_user_id,
+            /* V2: legacy_user_id removed */
             u.email,
             u.password_hash,
             u.display_name,
@@ -1141,7 +1145,7 @@ async function findTenantAuthUserByLegacyId(tenantCtx, legacyUserId) {
   const schema = quoteSchemaIdent(tenantCtx?.schemaName || `tenant_${tenantCtx?.id}`, tenantCtx?.id);
   const { rows } = await tenantCtx.db.query(
     `SELECT u.user_id,
-            u.legacy_user_id,
+            /* V2: legacy_user_id removed */
             u.email,
             u.password_hash,
             u.display_name,
@@ -1158,50 +1162,51 @@ async function findTenantAuthUserByLegacyId(tenantCtx, legacyUserId) {
   return rows[0] || null;
 }
 
+async function findTenantAuthUserById(tenantCtx, userId) {
+  if (!userId) return null;
+  const schema = quoteSchemaIdent(tenantCtx?.schemaName || `tenant_${tenantCtx?.id}`, tenantCtx?.id);
+  const { rows } = await tenantCtx.db.query(
+    `SELECT u.user_id, u.email, u.password_hash, u.display_name, u.is_active, u.deleted_at, r.name AS role_name
+       FROM ${schema}.users u
+       LEFT JOIN ${schema}.roles r ON r.role_id = u.role_id
+      WHERE u.user_id = $1 AND u.deleted_at IS NULL
+      LIMIT 1`,
+    [userId]
+  );
+  return rows[0] || null;
+}
+
 async function buildAppUserFromTenantAuth(tenantCtx, tenantAuthUser) {
   if (!tenantAuthUser) return null;
-  const legacyUserId = Number(tenantAuthUser.legacy_user_id);
   const legacyRole = mapTenantRoleToLegacyRole(tenantAuthUser.role_name);
   const { rows } = await tenantCtx.db.query(
-    `SELECT id,
-            tenant_id,
-            name,
-            vorname,
-            nachname,
-            username,
-            role,
-            rolle,
-            email,
-            beschreibung,
-            metadata
-       FROM users
-      WHERE id = $1
-        AND tenant_id = $2
+    `SELECT u.user_id, u.email, u.display_name, u.first_name, u.last_name, u.initials, u.is_active, r.name AS role_name
+       FROM users u
+       LEFT JOIN roles r ON r.role_id = u.role_id
+      WHERE u.user_id = $1
+        AND u.deleted_at IS NULL
       LIMIT 1`,
-    [legacyUserId, tenantCtx.id]
+    [tenantAuthUser.user_id]
   );
   if (rows.length > 0) {
-    const userRow = rows[0];
-    userRow.role = legacyRole;
-    userRow.rolle = tenantAuthUser.role_name || userRow.rolle || legacyRole;
-    userRow.email = userRow.email || tenantAuthUser.email || null;
-    userRow.name = userRow.name || tenantAuthUser.display_name || null;
-    return userRow;
+    const u = rows[0];
+    return {
+      id: u.user_id, user_id: u.user_id,
+      name: u.display_name || [u.first_name, u.last_name].filter(Boolean).join(' ') || u.email,
+      vorname: u.first_name || null, nachname: u.last_name || null,
+      role: legacyRole, rolle: u.role_name || legacyRole,
+      email: u.email || tenantAuthUser.email || null,
+      displayName: u.display_name || null, initials: u.initials || null,
+      is_active: u.is_active, metadata: {},
+    };
   }
   const email = String(tenantAuthUser.email || '').trim().toLowerCase();
   const fallbackName = String(tenantAuthUser.display_name || email.split('@')[0] || 'User').trim();
   return {
-    id: legacyUserId,
-    tenant_id: tenantCtx.id,
-    name: fallbackName,
-    vorname: null,
-    nachname: null,
-    username: email.split('@')[0] || null,
-    role: legacyRole,
-    rolle: tenantAuthUser.role_name || legacyRole,
-    email: email || null,
-    beschreibung: '',
-    metadata: {},
+    id: tenantAuthUser.user_id, user_id: tenantAuthUser.user_id,
+    name: fallbackName, vorname: null, nachname: null,
+    role: legacyRole, rolle: tenantAuthUser.role_name || legacyRole,
+    email: email || null, displayName: fallbackName, metadata: {},
   };
 }
 
@@ -1252,7 +1257,7 @@ async function authenticateToken(req, res, next) {
   }
 
   try {
-    const tenantAuthUser = await findTenantAuthUserByLegacyId(tenantCtx, payload.id);
+    const tenantAuthUser = await findTenantAuthUserById(tenantCtx, payload.id);
     if (!tenantAuthUser || !tenantAuthUser.is_active) {
       await audit(tenantCtx, 'auth.unknown_user', { ...clientMeta(req), userId: payload.id });
       return res.status(401).json({ message: 'Benutzer nicht gefunden' });
@@ -1339,8 +1344,8 @@ app.post('/api/login', loginLimiter, async (req, res) => {
       await audit(tenantCtx, 'login.failed', { username: identifier, ...clientMeta(req), reason: 'invalid_credentials' });
       return res.status(401).json({ message: LOGIN_FAILURE_MESSAGE });
     }
-    if (!tenantAuthUser.legacy_user_id) {
-      await audit(tenantCtx, 'login.failed', { username: identifier, ...clientMeta(req), reason: 'legacy_user_mapping_missing' });
+    if (!tenantAuthUser.user_id) {
+      await audit(tenantCtx, 'login.failed', { username: identifier, ...clientMeta(req), reason: 'user_id_missing' });
       return res.status(500).json({ message: 'Benutzer-Mapping ist unvollständig' });
     }
     const ok = await bcrypt.compare(password, tenantAuthUser.password_hash || '');
@@ -1456,7 +1461,7 @@ apiRouter.get('/calendars', authenticateToken, requirePermission('appointments.r
   try {
     const db = req.tenant.db;
     const role = String(req.user?.role || req.user?.rolle || '').toLowerCase();
-    const uid = Number(req.user?.id);
+    const uid = req.user?.id;
     const isPrivileged = ['admin', 'doctor', 'arzt', 'ärztin'].includes(role);
 
     let rows;
@@ -1467,9 +1472,9 @@ apiRouter.get('/calendars', authenticateToken, requirePermission('appointments.r
       } catch {}
       try {
         await db.query(
-          `SELECT public.ensure_user_calendar($1, u.id)
+          `SELECT public.ensure_user_calendar($1, u.user_id)
              FROM users u
-            WHERE u.tenant_id = $1`,
+            WHERE u.deleted_at IS NULL`,
           [req.tenant.id]
         );
       } catch (e) {
@@ -1478,67 +1483,62 @@ apiRouter.get('/calendars', authenticateToken, requirePermission('appointments.r
           console.warn('calendar auto-provision warning:', e?.message || e);
         }
         await db.query(
-          `INSERT INTO calendars (tenant_id, name, type, owner_user_id, is_default, metadata)
-           SELECT u.tenant_id,
-                  COALESCE(NULLIF(trim(u.name), ''), u.email, 'Benutzer-Kalender'),
-                  'user',
-                  u.id,
-                  false,
-                  jsonb_build_object('role', u.role)
+          `INSERT INTO calendars (name, owner_user_id, is_shared)
+           SELECT COALESCE(NULLIF(trim(u.display_name), ''), u.email, 'Benutzer-Kalender'),
+                  u.user_id,
+                  false
              FROM users u
              LEFT JOIN calendars c
-               ON c.tenant_id = u.tenant_id
-              AND c.type = 'user'
-              AND c.owner_user_id = u.id
-            WHERE u.tenant_id = $1
-              AND c.id IS NULL
+               ON c.owner_user_id = u.user_id
+            WHERE u.deleted_at IS NULL
+              AND c.calendar_id IS NULL
            ON CONFLICT DO NOTHING`,
           [req.tenant.id]
         );
         await db.query(
-          `INSERT INTO calendar_members (calendar_id, user_id, role)
-           SELECT c.id, c.owner_user_id, 'owner'
+          `INSERT INTO calendar_members (calendar_id, user_id, permission)
+           SELECT c.calendar_id, c.owner_user_id, 'write'
              FROM calendars c
-            WHERE c.tenant_id = $1
-              AND c.type = 'user'
-              AND c.owner_user_id IS NOT NULL
+            WHERE c.owner_user_id IS NOT NULL
+              AND EXISTS (SELECT 1 FROM users u WHERE u.user_id = c.owner_user_id AND u.deleted_at IS NULL)
            ON CONFLICT DO NOTHING`,
           [req.tenant.id]
         );
         await db.query(
-          `INSERT INTO calendar_members (calendar_id, user_id, role)
-           SELECT c.id, u.id, 'viewer'
+          `INSERT INTO calendar_members (calendar_id, user_id, permission)
+           SELECT c.calendar_id, u.user_id, 'read'
              FROM calendars c
-             JOIN users u
-               ON u.tenant_id = c.tenant_id
-            WHERE c.tenant_id = $1
-              AND c.type = 'user'
-              AND c.owner_user_id IS NOT NULL
-              AND lower(coalesce(u.role, u.rolle, '')) = 'admin'
-              AND u.id <> c.owner_user_id
+             JOIN users u ON u.deleted_at IS NULL
+             LEFT JOIN roles r ON r.role_id = u.role_id
+            WHERE c.owner_user_id IS NOT NULL
+              AND EXISTS (SELECT 1 FROM users u2 WHERE u2.user_id = c.owner_user_id AND u2.deleted_at IS NULL)
+              AND lower(coalesce(r.name, '')) = 'admin'
+              AND u.user_id <> c.owner_user_id
            ON CONFLICT DO NOTHING`,
           [req.tenant.id]
         );
       }
       const { rows: r } = await db.query(
-        `SELECT id, tenant_id, name, type, owner_user_id, is_default, metadata
-           FROM calendars
-          WHERE tenant_id = $1
-          ORDER BY type, id`,
+        `SELECT calendar_id, calendar_id AS id, name, owner_user_id, is_shared, color, created_at
+           FROM calendars c
+          WHERE EXISTS (SELECT 1 FROM users u WHERE u.user_id = c.owner_user_id AND u.deleted_at IS NULL)
+             OR c.is_shared = true
+          ORDER BY c.name, c.calendar_id`,
         [req.tenant.id]
       );
       rows = r;
     } else {
       const { rows: r } = await db.query(
-        `SELECT id, tenant_id, name, type, owner_user_id, is_default, metadata
+        `SELECT calendar_id, calendar_id AS id, name, owner_user_id, is_shared, color, created_at
            FROM calendars
-          WHERE tenant_id = $1
-            AND (
-              (type = 'user' AND owner_user_id = $2)
-              OR (type = 'tenant' AND (is_default = true OR (metadata->>'is_default')::boolean = true))
-            )
-          ORDER BY type, id`,
-        [req.tenant.id, uid || 0]
+          WHERE owner_user_id = $2
+             OR is_shared = true
+             OR EXISTS (
+               SELECT 1 FROM calendar_members cm
+                WHERE cm.calendar_id = calendars.calendar_id AND cm.user_id = $2
+             )
+          ORDER BY name, calendar_id`,
+        [req.tenant.id, uid || '00000000-0000-0000-0000-000000000000']
       );
       rows = r;
     }
@@ -1564,36 +1564,33 @@ apiRouter.get('/calendars/me', authenticateToken, requirePermission('appointment
 apiRouter.get('/calendars/mine', authenticateToken, requirePermission('appointments.read', 'admin', 'doctor', 'assistant'), async (req, res) => {
   try {
     const db = req.tenant.db;
-    const uid = Number(req.user?.id || 0);
+    const uid = req.user?.id || null;
     const ensureMemberships = async (calendarId) => {
-      if (!Number.isFinite(uid) || uid <= 0 || !Number.isFinite(Number(calendarId))) return;
+      if (!uid || !calendarId) return;
       await db.query(
-        `INSERT INTO calendar_members (calendar_id, user_id, role)
-         VALUES ($1, $2, 'owner')
-         ON CONFLICT (calendar_id, user_id) DO UPDATE
-         SET role = CASE
-           WHEN calendar_members.role = 'owner' THEN calendar_members.role
-           ELSE EXCLUDED.role
-         END`,
-        [Number(calendarId), uid]
+        `INSERT INTO calendar_members (calendar_id, user_id, permission)
+         VALUES ($1, $2, 'write')
+         ON CONFLICT (calendar_id, user_id) DO NOTHING`,
+        [calendarId, uid]
       );
       await db.query(
-        `INSERT INTO calendar_members (calendar_id, user_id, role)
-         SELECT $1, u.id, 'viewer'
+        `INSERT INTO calendar_members (calendar_id, user_id, permission)
+         SELECT $1, u.user_id, 'read'
            FROM users u
-          WHERE u.tenant_id = $2
-            AND lower(coalesce(u.role, u.rolle, '')) = 'admin'
-            AND u.id <> $3
+           LEFT JOIN roles r ON r.role_id = u.role_id
+          WHERE u.deleted_at IS NULL
+            AND lower(coalesce(r.name, '')) = 'admin'
+            AND u.user_id <> $2
          ON CONFLICT DO NOTHING`,
-        [Number(calendarId), req.tenant.id, uid]
+        [calendarId, uid]
       );
     };
     const { rows } = await db.query(
-      `SELECT id, tenant_id, name, type, owner_user_id, is_default, metadata
+      `SELECT calendar_id AS id, name, owner_user_id, is_shared, color
          FROM calendars
-        WHERE tenant_id = $1 AND type = 'user' AND owner_user_id = $2
+        WHERE owner_user_id = $1 AND is_shared = false
         LIMIT 1`,
-      [req.tenant.id, uid]
+      [uid]
     );
     if (rows.length) {
       await ensureMemberships(rows[0].id);
@@ -1602,10 +1599,10 @@ apiRouter.get('/calendars/mine', authenticateToken, requirePermission('appointme
     // Auto-Provision persönlicher Kalender
     const display = req.user?.name || req.user?.email || 'Mein Kalender';
     const ins = await db.query(
-      `INSERT INTO calendars(tenant_id, name, type, owner_user_id, is_default)
-       VALUES ($1,$2,'user',$3,false)
-       RETURNING id, tenant_id, name, type, owner_user_id, is_default, metadata`,
-      [req.tenant.id, String(display).slice(0,80), uid]
+      `INSERT INTO calendars(name, owner_user_id, is_shared)
+       VALUES ($1,$2,false)
+       RETURNING calendar_id AS id, name, owner_user_id, is_shared`,
+      [String(display).slice(0,80), uid]
     );
     await ensureMemberships(ins.rows[0]?.id);
     return res.json(ins.rows[0]);
@@ -1628,7 +1625,7 @@ apiRouter.get('/notes', authenticateToken, requireRole('admin','arzt','assistenz
   try {
     const filters = {
       visibilityType: req.query.visibilityType || req.query.visibility_type || req.query.visibility,
-      patientId: req.query.patientId != null ? Number(req.query.patientId) : (req.query.patient_id != null ? Number(req.query.patient_id) : undefined),
+      patientId: req.query.patientId || req.query.patient_id || undefined,
       tag: req.query.tag,
       search: req.query.q || req.query.search,
       limit: req.query.limit,
@@ -1648,7 +1645,7 @@ apiRouter.get('/notes/:id', authenticateToken, requireRole('admin','arzt','assis
     const dto = await notesService.getNote(req.tenant, req.params.id);
     if (!dto) return res.status(404).json({ message: 'Notiz nicht gefunden' });
     // Visibility enforcement for PERSONAL
-    if (dto.note.visibility_type === 'PERSONAL' && Number(dto.note.owner_user_id) !== Number(req.user?.id)) {
+    if (dto.note.visibility_type === 'PERSONAL' && String(dto.note.owner_user_id) !== String(req.user?.id)) {
       return res.status(403).json({ message: 'Nicht berechtigt' });
     }
     res.json(dto);
@@ -1738,8 +1735,8 @@ const WAITING_STATUSES = ['ANGEMELDET','WARTEZIMMER','IN_BEHANDLUNG','FERTIG'];
 // Helper to ensure patient belongs to tenant and exists
 async function ensurePatientInTenant(db, tenantId, patientId) {
   const { rows } = await db.query(
-    `SELECT id, vorname, nachname, name FROM patients WHERE tenant_id = $1 AND id = $2 LIMIT 1`,
-    [tenantId, Number(patientId)]
+    `SELECT patient_id AS id, first_name AS vorname, last_name AS nachname FROM patients WHERE patient_id = $1 LIMIT 1`,
+    [patientId]
   );
   return rows[0] || null;
 }
@@ -1750,14 +1747,14 @@ apiRouter.get('/patient-journey', authenticateToken, requireRole('admin','arzt',
     const db = req.tenant.db;
     const tenantId = req.tenant.id;
     const stage = (req.query.stage || '').toString().trim().toUpperCase();
-    const params = [tenantId];
-    let where = 'pj.tenant_id = $1';
+    const params = [];
+    let where = 'TRUE';
     if (stage && JOURNEY_STAGES.includes(stage)) { params.push(stage); where += ` AND pj.stage = $${params.length}`; }
     const { rows } = await db.query(
-      `SELECT pj.id, pj.tenant_id, pj.patient_id, pj.stage, pj.updated_at, pj.updated_by_user_id,
-              p.vorname, p.nachname, p.name
+      `SELECT pj.journey_id AS id, pj.patient_id, pj.stage, pj.updated_at,
+              p.first_name AS vorname, p.last_name AS nachname
          FROM patient_journey pj
-         JOIN patients p ON p.id = pj.patient_id AND p.tenant_id = pj.tenant_id
+         JOIN patients p ON p.patient_id = pj.patient_id
         WHERE ${where}
         ORDER BY pj.updated_at DESC`
       , params);
@@ -1773,16 +1770,16 @@ apiRouter.get('/patients/:id/journey', authenticateToken, requireRole('admin','a
   try {
     const db = req.tenant.db;
     const tenantId = req.tenant.id;
-    const pid = Number(req.params.id);
+    const pid = req.params.id;
     if (!pid) return res.status(400).json({ message: 'Ungültige Patienten-ID' });
     const patient = await ensurePatientInTenant(db, tenantId, pid);
     if (!patient) return res.status(404).json({ message: 'Patient nicht gefunden' });
     const { rows } = await db.query(
-      `SELECT id, tenant_id, patient_id, stage, updated_at, updated_by_user_id
+      `SELECT journey_id AS id, patient_id, stage, updated_at
          FROM patient_journey
-        WHERE tenant_id = $1 AND patient_id = $2
+        WHERE patient_id = $1
         LIMIT 1`,
-      [tenantId, pid]
+      [pid]
     );
     if (!rows.length) return res.json({ patient_id: pid, stage: 'NEW' });
     res.json(rows[0]);
@@ -1797,20 +1794,20 @@ apiRouter.patch('/patients/:id/journey', authenticateToken, requireRole('admin',
   try {
     const db = req.tenant.db;
     const tenantId = req.tenant.id;
-    const uid = Number(req.user?.id) || null;
-    const pid = Number(req.params.id);
+    const uid = req.user?.id || null;
+    const pid = req.params.id;
     const stage = String(req.body?.stage || '').trim().toUpperCase();
     if (!pid) return res.status(400).json({ message: 'Ungültige Patienten-ID' });
     if (!JOURNEY_STAGES.includes(stage)) return res.status(400).json({ message: 'Ungültige Stage' });
     const patient = await ensurePatientInTenant(db, tenantId, pid);
     if (!patient) return res.status(404).json({ message: 'Patient nicht gefunden' });
     const { rows } = await db.query(
-      `INSERT INTO patient_journey (tenant_id, patient_id, stage, updated_by_user_id)
-       VALUES ($1,$2,$3,$4)
-       ON CONFLICT (tenant_id, patient_id)
-       DO UPDATE SET stage = EXCLUDED.stage, updated_by_user_id = EXCLUDED.updated_by_user_id, updated_at = now()
-       RETURNING id, tenant_id, patient_id, stage, updated_at, updated_by_user_id`,
-      [tenantId, pid, stage, uid]
+      `INSERT INTO patient_journey (patient_id, stage, updated_by)
+       VALUES ($1,$2,$3)
+       ON CONFLICT (patient_id)
+       DO UPDATE SET stage = EXCLUDED.stage, updated_by = EXCLUDED.updated_by, updated_at = now()
+       RETURNING journey_id AS id, patient_id, stage, updated_at`,
+      [pid, stage, uid]
     );
     res.json(rows[0]);
   } catch (err) {
@@ -1825,14 +1822,14 @@ apiRouter.get('/waiting-room', authenticateToken, requireRole('admin','arzt','as
     const db = req.tenant.db;
     const tenantId = req.tenant.id;
     const status = (req.query.status || '').toString().trim().toUpperCase();
-    const params = [tenantId];
-    let where = 'w.tenant_id = $1';
+    const params = [];
+    let where = 'TRUE';
     if (status && WAITING_STATUSES.includes(status)) { params.push(status); where += ` AND w.status = $${params.length}`; }
     const { rows } = await db.query(
-      `SELECT w.id, w.tenant_id, w.patient_id, w.status, w.last_change_at, w.last_change_by_user_id,
-              p.vorname, p.nachname, p.name
+      `SELECT w.waiting_room_id AS id, w.patient_id, w.status, w.last_change_at, w.last_change_by,
+              p.first_name AS vorname, p.last_name AS nachname
          FROM waiting_room_status w
-         JOIN patients p ON p.id = w.patient_id AND p.tenant_id = w.tenant_id
+         JOIN patients p ON p.patient_id = w.patient_id
         WHERE ${where}
         ORDER BY w.last_change_at DESC`,
       params
@@ -1851,16 +1848,16 @@ apiRouter.get('/patients/:id/waiting-status', authenticateToken, requireRole('ad
   try {
     const db = req.tenant.db;
     const tenantId = req.tenant.id;
-    const pid = Number(req.params.id);
+    const pid = req.params.id;
     if (!pid) return res.status(400).json({ message: 'Ungültige Patienten-ID' });
     const patient = await ensurePatientInTenant(db, tenantId, pid);
     if (!patient) return res.status(404).json({ message: 'Patient nicht gefunden' });
     const { rows } = await db.query(
-      `SELECT id, tenant_id, patient_id, status, last_change_at, last_change_by_user_id
+      `SELECT waiting_room_id AS id, patient_id, status, last_change_at, last_change_by
          FROM waiting_room_status
-        WHERE tenant_id = $1 AND patient_id = $2
+        WHERE patient_id = $1
         LIMIT 1`,
-      [tenantId, pid]
+      [pid]
     );
     if (!rows.length) return res.json({ patient_id: pid, status: 'ANGEMELDET' });
     res.json(rows[0]);
@@ -1875,20 +1872,20 @@ apiRouter.post('/patients/:id/waiting-status', authenticateToken, requireRole('a
   try {
     const db = req.tenant.db;
     const tenantId = req.tenant.id;
-    const uid = Number(req.user?.id) || null;
-    const pid = Number(req.params.id);
+    const uid = req.user?.id || null;
+    const pid = req.params.id;
     const status = String(req.body?.status || '').trim().toUpperCase();
     if (!pid) return res.status(400).json({ message: 'Ungültige Patienten-ID' });
     if (!WAITING_STATUSES.includes(status)) return res.status(400).json({ message: 'Ungültiger Status' });
     const patient = await ensurePatientInTenant(db, tenantId, pid);
     if (!patient) return res.status(404).json({ message: 'Patient nicht gefunden' });
     const { rows } = await db.query(
-      `INSERT INTO waiting_room_status (tenant_id, patient_id, status, last_change_by_user_id, last_change_at)
-       VALUES ($1,$2,$3,$4, now())
-       ON CONFLICT (tenant_id, patient_id)
-       DO UPDATE SET status = EXCLUDED.status, last_change_by_user_id = EXCLUDED.last_change_by_user_id, last_change_at = now()
-       RETURNING id, tenant_id, patient_id, status, last_change_at, last_change_by_user_id`,
-      [tenantId, pid, status, uid]
+      `INSERT INTO waiting_room_status (patient_id, status, last_change_by, last_change_at)
+       VALUES ($1,$2,$3, now())
+       ON CONFLICT (patient_id)
+       DO UPDATE SET status = EXCLUDED.status, last_change_by = EXCLUDED.last_change_by, last_change_at = now()
+       RETURNING waiting_room_id AS id, patient_id, status, last_change_at, last_change_by`,
+      [pid, status, uid]
     );
     res.json(rows[0]);
   } catch (err) {
@@ -2106,7 +2103,7 @@ app.post('/api/automation/events', authenticateToken, requireRole('admin','docto
     const tenantCtx = await ensureRequestTenant(req);
     const { type, patientId, details } = req.body || {};
     if (!type) return res.status(400).json({ message: 'type fehlt' });
-    const pid = patientId ? Number(patientId) : null;
+    const pid = patientId || null;
     const settings = await getAutomationSettings(tenantCtx);
     const auto = settings.autoTasks || {};
     let created = null;
@@ -2129,7 +2126,7 @@ app.post('/api/automation/events', authenticateToken, requireRole('admin','docto
     }
     // Flow engine: execute active workflows for this trigger
     try {
-      const { rows: defs } = await tenantCtx.db.query(`SELECT * FROM workflow_definitions WHERE tenant_id = $1 AND is_active = true AND trigger_type = $2`, [tenantCtx.id, String(type).toUpperCase()]);
+      const { rows: defs } = await tenantCtx.db.query(`SELECT * FROM workflow_definitions WHERE is_active = true AND trigger_type = $1`, [String(type).toUpperCase()]);
       for (const def of defs) {
         try {
           const steps = Array.isArray(def.definition_json) ? def.definition_json : [];
@@ -2148,18 +2145,18 @@ app.post('/api/automation/events', authenticateToken, requireRole('admin','docto
               if (details?.appointment_id) {
                 const off = Number(step.parameters?.offsetMinutes || 60);
                 const channel = String(step.parameters?.channel || 'INTERNAL').toUpperCase();
-                const { rows: apptRows } = await tenantCtx.db.query(`SELECT starts_at FROM appointments WHERE tenant_id = $1 AND id = $2`, [tenantCtx.id, Number(details.appointment_id)]);
+                const { rows: apptRows } = await tenantCtx.db.query(`SELECT start_at AS starts_at FROM appointments WHERE appointment_id = $1`, [details.appointment_id]);
                 if (apptRows.length) {
                   const due = new Date(new Date(apptRows[0].starts_at).getTime() - off*60000);
                   await tenantCtx.db.query(
-                    `INSERT INTO appointment_reminders (tenant_id, appointment_id, channel, due_at, status, payload) VALUES ($1,$2,$3,$4,'PENDING',$5) ON CONFLICT DO NOTHING`,
-                    [tenantCtx.id, Number(details.appointment_id), channel, due, { patient_id: pid }]
+                    `INSERT INTO appointment_reminders (appointment_id, channel, due_at, status, payload) VALUES ($1,$2,$3,'PENDING',$4) ON CONFLICT DO NOTHING`,
+                    [details.appointment_id, channel, due, { patient_id: pid }]
                   );
                 }
               }
             }
           }
-          await tenantCtx.db.query(`INSERT INTO workflow_runs (tenant_id, workflow_definition_id, trigger_context) VALUES ($1,$2,$3)`, [tenantCtx.id, def.id, { type, patientId, details }]);
+          await tenantCtx.db.query(`INSERT INTO workflow_runs (workflow_definition_id, trigger_context) VALUES ($1,$2)`, [def.workflow_definition_id, { type, patientId, details }]);
         } catch (_) {}
       }
     } catch (_) {}
@@ -2181,10 +2178,10 @@ async function sweepCreateReminders(tenantCtx, now = new Date()) {
   const windowEnd = new Date(now.getTime() + 2 * 24 * 60 * 60 * 1000);
   // fetch candidate appointments
   const { rows } = await tenantCtx.db.query(
-    `SELECT id, tenant_id, patient_id, starts_at
+    `SELECT appointment_id, patient_id, start_at AS starts_at
        FROM appointments
-      WHERE tenant_id = $1 AND starts_at >= $2 AND starts_at <= $3`,
-    [tenantCtx.id, now, windowEnd]
+      WHERE start_at >= $1 AND start_at <= $2`,
+    [now, windowEnd]
   );
   let created = 0;
   for (const appt of rows) {
@@ -2197,10 +2194,10 @@ async function sweepCreateReminders(tenantCtx, now = new Date()) {
       if (due.getTime() < now.getTime() - 10 * 60 * 1000) continue;
       try {
         await tenantCtx.db.query(
-          `INSERT INTO appointment_reminders (tenant_id, appointment_id, channel, due_at, status, payload)
-           VALUES ($1,$2,$3,$4,'PENDING', $5)
-           ON CONFLICT (tenant_id, appointment_id, channel, due_at) DO NOTHING`,
-          [tenantCtx.id, appt.id, channel, due, { patient_id: appt.patient_id }]
+          `INSERT INTO appointment_reminders (appointment_id, channel, due_at, status, payload)
+           VALUES ($1,$2,$3,'PENDING', $4)
+           ON CONFLICT (appointment_id, channel, due_at) DO NOTHING`,
+          [appt.appointment_id, channel, due, { patient_id: appt.patient_id }]
         );
         created++;
       } catch (_) {}
@@ -2211,13 +2208,13 @@ async function sweepCreateReminders(tenantCtx, now = new Date()) {
 
 async function sweepDispatchReminders(tenantCtx, now = new Date()) {
   const { rows } = await tenantCtx.db.query(
-    `SELECT r.id, r.appointment_id, r.channel, r.due_at, a.patient_id, a.starts_at
+    `SELECT r.reminder_id, r.appointment_id, r.channel, r.due_at, a.patient_id, a.start_at AS starts_at
        FROM appointment_reminders r
-       JOIN appointments a ON a.id = r.appointment_id
-      WHERE r.tenant_id = $1 AND r.status = 'PENDING' AND r.due_at <= $2
+       JOIN appointments a ON a.appointment_id = r.appointment_id
+      WHERE r.status = 'PENDING' AND r.due_at <= $1
       ORDER BY r.due_at ASC
       LIMIT 100`,
-    [tenantCtx.id, now]
+    [now]
   );
   let sent = 0;
   for (const row of rows) {
@@ -2233,12 +2230,12 @@ async function sweepDispatchReminders(tenantCtx, now = new Date()) {
         tags: ['REMINDER','AUTO']
       }, null);
       await tenantCtx.db.query(
-        `UPDATE appointment_reminders SET status='SENT', sent_at = now(), updated_at = now() WHERE id = $1`,
-        [row.id]
+        `UPDATE appointment_reminders SET status='SENT', sent_at = now(), updated_at = now() WHERE reminder_id = $1`,
+        [row.reminder_id]
       );
       sent++;
     } catch (err) {
-      await tenantCtx.db.query(`UPDATE appointment_reminders SET status='FAILED', updated_at = now() WHERE id = $1`, [row.id]);
+      await tenantCtx.db.query(`UPDATE appointment_reminders SET status='FAILED', updated_at = now() WHERE reminder_id = $1`, [row.reminder_id]);
     }
   }
   return { sent };
@@ -2271,19 +2268,18 @@ app.get('/api/rooms', authenticateToken, requireRole('admin','arzt','assistenz',
     const withStatus = String(q.with_status || '').toLowerCase() === 'true';
     const statusAt = q.status_at ? new Date(String(q.status_at)) : null;
     const nowRef = statusAt && !isNaN(statusAt.getTime()) ? statusAt : new Date();
-    const params = [tenantCtx.id];
-    let where = 'r.tenant_id = $1';
-    if (activeOnly) where += ' AND r.active = true';
+    const params = [];
+    let where = 'TRUE';
+    if (activeOnly) where += ' AND r.is_active = true';
     let sql = `SELECT r.* FROM rooms r WHERE ${where} ORDER BY r.type, r.name`;
     if (withStatus) {
+      params.push(nowRef); // $1
       params.push(nowRef); // $2
-      params.push(nowRef); // $3
       sql = `SELECT r.*, EXISTS (
                 SELECT 1 FROM room_bookings b
-                 WHERE b.tenant_id = r.tenant_id
-                   AND b.room_id = r.id
-                   AND b.start_time < $2
-                   AND b.end_time   > $3
+                 WHERE b.room_id = r.room_id
+                   AND b.start_time < $1
+                   AND b.end_time   > $2
               ) AS occupied
              FROM rooms r
             WHERE ${where}
@@ -2304,9 +2300,9 @@ app.post('/api/rooms', authenticateToken, requireRole('admin','doctor'), async (
     if (!name) return res.status(400).json({ message: 'name fehlt' });
     const t = String(type).toUpperCase();
     const { rows } = await tenantCtx.db.query(
-      `INSERT INTO rooms (tenant_id, name, type, active, floor, building, width, height, color)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
-      [tenantCtx.id, String(name), t, Boolean(active), floor, building, width, height, color]
+      `INSERT INTO rooms (name, type, is_active, floor, building, width, height, color)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
+      [String(name), t, Boolean(active), floor, building, width, height, color]
     );
     res.status(201).json(rows[0]);
   } catch (err) {
@@ -2318,14 +2314,14 @@ app.post('/api/rooms', authenticateToken, requireRole('admin','doctor'), async (
 app.patch('/api/rooms/:id', authenticateToken, requireRole('admin','doctor'), async (req, res) => {
   try {
     const tenantCtx = await ensureRequestTenant(req);
-    const id = Number(req.params.id);
+    const id = req.params.id;
     const fields = [];
-    const params = [tenantCtx.id, id];
+    const params = [id];
     let i = params.length;
   const set = (col, val) => { fields.push(`${col} = $${++i}`); params.push(val); };
   if (req.body?.name !== undefined) set('name', String(req.body.name));
   if (req.body?.type !== undefined) set('type', String(req.body.type).toUpperCase());
-  if (req.body?.active !== undefined) set('active', Boolean(req.body.active));
+  if (req.body?.active !== undefined) set('is_active', Boolean(req.body.active));
   if (req.body?.floor !== undefined) set('floor', req.body.floor || null);
   if (req.body?.building !== undefined) set('building', req.body.building || null);
   if (req.body?.width !== undefined) set('width', req.body.width != null ? Number(req.body.width) : null);
@@ -2334,7 +2330,7 @@ app.patch('/api/rooms/:id', authenticateToken, requireRole('admin','doctor'), as
   if (!fields.length) return res.status(400).json({ message: 'keine Änderungen' });
     const { rows } = await tenantCtx.db.query(
       `UPDATE rooms SET ${fields.join(', ')}, updated_at = now()
-        WHERE tenant_id = $1 AND id = $2
+        WHERE room_id = $1
         RETURNING *`,
       params
     );
@@ -2349,10 +2345,10 @@ app.patch('/api/rooms/:id', authenticateToken, requireRole('admin','doctor'), as
 app.delete('/api/rooms/:id', authenticateToken, requireRole('admin','doctor'), async (req, res) => {
   try {
     const tenantCtx = await ensureRequestTenant(req);
-    const id = Number(req.params.id);
+    const id = req.params.id;
     const { rows } = await tenantCtx.db.query(
-      `UPDATE rooms SET active = false, updated_at = now() WHERE tenant_id = $1 AND id = $2 RETURNING *`,
-      [tenantCtx.id, id]
+      `UPDATE rooms SET is_active = false, updated_at = now() WHERE room_id = $1 RETURNING *`,
+      [id]
     );
     if (!rows.length) return res.status(404).json({ message: 'Raum nicht gefunden' });
     res.json({ ok: true, room: rows[0] });
@@ -2365,10 +2361,10 @@ app.delete('/api/rooms/:id', authenticateToken, requireRole('admin','doctor'), a
 app.get('/api/rooms/:id/layout', authenticateToken, requireRole('admin','arzt','assistenz','doctor','assistant'), async (req, res) => {
   try {
     const tenantCtx = await ensureRequestTenant(req);
-    const id = Number(req.params.id);
+    const id = req.params.id;
     const { rows } = await tenantCtx.db.query(
-      `SELECT * FROM room_layout_objects WHERE tenant_id = $1 AND room_id = $2 ORDER BY COALESCE(z_index,0), id`,
-      [tenantCtx.id, id]
+      `SELECT * FROM room_layout_objects WHERE room_id = $1 ORDER BY COALESCE(z_index,0), layout_object_id`,
+      [id]
     );
     res.json({ items: rows });
   } catch (err) {
@@ -2379,16 +2375,16 @@ app.get('/api/rooms/:id/layout', authenticateToken, requireRole('admin','arzt','
 app.post('/api/rooms/:id/layout', authenticateToken, requireRole('admin','doctor'), async (req, res) => {
   try {
     const tenantCtx = await ensureRequestTenant(req);
-    const id = Number(req.params.id);
+    const id = req.params.id;
     const { type, x=0, y=0, width=1, height=1, rotation=0, z_index=null, properties=null } = req.body || {};
     if (!type) return res.status(400).json({ message: 'type fehlt' });
-    const { rows: exists } = await tenantCtx.db.query(`SELECT 1 FROM rooms WHERE tenant_id = $1 AND id = $2 AND active = true`, [tenantCtx.id, id]);
+    const { rows: exists } = await tenantCtx.db.query(`SELECT 1 FROM rooms WHERE room_id = $1 AND is_active = true`, [id]);
     if (!exists.length) return res.status(404).json({ message: 'Raum nicht gefunden' });
     const { rows } = await tenantCtx.db.query(
-      `INSERT INTO room_layout_objects (tenant_id, room_id, type, x, y, width, height, rotation, z_index, properties)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,COALESCE($10,'{}'::jsonb))
+      `INSERT INTO room_layout_objects (room_id, type, x, y, width, height, rotation, z_index, properties)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,COALESCE($9,'{}'::jsonb))
        RETURNING *`,
-      [tenantCtx.id, id, String(type).toUpperCase(), Number(x), Number(y), Number(width), Number(height), Number(rotation), z_index != null ? Number(z_index) : null, properties]
+      [id, String(type).toUpperCase(), Number(x), Number(y), Number(width), Number(height), Number(rotation), z_index != null ? Number(z_index) : null, properties]
     );
     res.status(201).json(rows[0]);
   } catch (err) {
@@ -2399,11 +2395,11 @@ app.post('/api/rooms/:id/layout', authenticateToken, requireRole('admin','doctor
 app.put('/api/room-layout-objects/:id', authenticateToken, requireRole('admin','doctor'), async (req, res) => {
   try {
     const tenantCtx = await ensureRequestTenant(req);
-    const id = Number(req.params.id);
-    const existing = await tenantCtx.db.query(`SELECT * FROM room_layout_objects WHERE tenant_id = $1 AND id = $2`, [tenantCtx.id, id]);
+    const id = req.params.id;
+    const existing = await tenantCtx.db.query(`SELECT * FROM room_layout_objects WHERE layout_object_id = $1`, [id]);
     if (!existing.rows.length) return res.status(404).json({ message: 'Objekt nicht gefunden' });
     const fields = [];
-    const params = [tenantCtx.id, id];
+    const params = [id];
     let i = params.length;
     const set = (col, val) => { fields.push(`${col} = $${++i}`); params.push(val); };
     const body = req.body || {};
@@ -2418,7 +2414,7 @@ app.put('/api/room-layout-objects/:id', authenticateToken, requireRole('admin','
     if (!fields.length) return res.status(400).json({ message: 'keine Änderungen' });
     const { rows } = await tenantCtx.db.query(
       `UPDATE room_layout_objects SET ${fields.join(', ')}, updated_at = now()
-        WHERE tenant_id = $1 AND id = $2
+        WHERE layout_object_id = $1
         RETURNING *`,
       params
     );
@@ -2431,8 +2427,8 @@ app.put('/api/room-layout-objects/:id', authenticateToken, requireRole('admin','
 app.delete('/api/room-layout-objects/:id', authenticateToken, requireRole('admin','doctor'), async (req, res) => {
   try {
     const tenantCtx = await ensureRequestTenant(req);
-    const id = Number(req.params.id);
-    const { rowCount } = await tenantCtx.db.query(`DELETE FROM room_layout_objects WHERE tenant_id = $1 AND id = $2`, [tenantCtx.id, id]);
+    const id = req.params.id;
+    const { rowCount } = await tenantCtx.db.query(`DELETE FROM room_layout_objects WHERE layout_object_id = $1`, [id]);
     if (!rowCount) return res.status(404).json({ message: 'Objekt nicht gefunden' });
     res.json({ ok: true });
   } catch (err) {
@@ -2444,20 +2440,20 @@ app.delete('/api/room-layout-objects/:id', authenticateToken, requireRole('admin
 app.get('/api/rooms/bookings', authenticateToken, requireRole('admin','arzt','assistenz','doctor','assistant'), async (req, res) => {
   try {
     const tenantCtx = await ensureRequestTenant(req);
-    const roomId = Number(req.query.roomId);
+    const roomId = req.query.roomId;
     const from = req.query.from ? new Date(String(req.query.from)) : null;
     const to   = req.query.to ? new Date(String(req.query.to)) : null;
     if (!roomId || !from || !to || isNaN(from.getTime()) || isNaN(to.getTime())) {
       return res.status(400).json({ message: 'roomId, from, to erforderlich' });
     }
     const { rows } = await tenantCtx.db.query(
-      `SELECT b.*, p.vorname, p.nachname
+      `SELECT b.*, p.first_name AS vorname, p.last_name AS nachname
          FROM room_bookings b
-         LEFT JOIN patients p ON p.id = b.patient_id AND p.tenant_id = b.tenant_id
-        WHERE b.tenant_id = $1 AND b.room_id = $2
-          AND b.start_time < $3 AND b.end_time > $4
+         LEFT JOIN patients p ON p.patient_id = b.patient_id
+        WHERE b.room_id = $1
+          AND b.start_time < $2 AND b.end_time > $3
         ORDER BY b.start_time ASC`,
-      [tenantCtx.id, roomId, to, from]
+      [roomId, to, from]
     );
     res.json({ items: rows });
   } catch (err) {
@@ -2474,29 +2470,29 @@ app.post('/api/rooms/bookings', authenticateToken, requireRole('admin','doctor',
   try {
     const tenantCtx = await ensureRequestTenant(req);
     const { room_id, start_time, end_time, patient_id, appointment_id, note, doctor_id, staff_ids, procedure_type, status, color, ignore_doctor_conflicts } = req.body || {};
-    const rid = Number(room_id);
+    const rid = room_id;
     const start = new Date(start_time);
     const end = new Date(end_time);
     if (!rid || !start_time || !end_time || isNaN(start.getTime()) || isNaN(end.getTime()) || !(end > start)) {
       return res.status(400).json({ message: 'Ungültige Zeit oder room_id' });
     }
-    const r = await tenantCtx.db.query(`SELECT id, name FROM rooms WHERE tenant_id = $1 AND id = $2 AND active = true`, [tenantCtx.id, rid]);
+    const r = await tenantCtx.db.query(`SELECT room_id, name FROM rooms WHERE room_id = $1 AND is_active = true`, [rid]);
     if (!r.rowCount) return res.status(404).json({ message: 'Raum nicht gefunden' });
     const roomName = r.rows[0].name;
     // overlap check within room
     const { rows: ov } = await tenantCtx.db.query(
-      `SELECT id FROM room_bookings
-         WHERE tenant_id = $1 AND room_id = $2 AND start_time < $3 AND end_time > $4
+      `SELECT booking_id FROM room_bookings
+         WHERE room_id = $1 AND start_time < $2 AND end_time > $3
          LIMIT 1`,
-      [tenantCtx.id, rid, end, start]
+      [rid, end, start]
     );
     if (ov.length) return res.status(409).json({ message: 'Zeitraum ist bereits belegt' });
     // optional doctor conflict
-    const docId = doctor_id ? Number(doctor_id) : (req.user?.id || null);
+    const docId = doctor_id || (req.user?.id || null);
     if (docId) {
       const dconf = await tenantCtx.db.query(
-        `SELECT id FROM room_bookings WHERE tenant_id = $1 AND doctor_id = $2 AND start_time < $3 AND end_time > $4 LIMIT 1`,
-        [tenantCtx.id, Number(docId), end, start]
+        `SELECT booking_id FROM room_bookings WHERE doctor_id = $1 AND start_time < $2 AND end_time > $3 LIMIT 1`,
+        [docId, end, start]
       );
       if (dconf.rows.length && String(ignore_doctor_conflicts || '').toLowerCase() !== 'true') {
         return res.status(409).json({ message: 'Der ausgewählte Arzt ist im Zeitraum bereits verplant', code: 'doctor_conflict' });
@@ -2504,14 +2500,14 @@ app.post('/api/rooms/bookings', authenticateToken, requireRole('admin','doctor',
     }
     const { rows } = await tenantCtx.db.query(
       `INSERT INTO room_bookings (
-         tenant_id, room_id, start_time, end_time, patient_id, appointment_id, note,
+         room_id, start_time, end_time, patient_id, appointment_id, note,
          doctor_id, staff_ids, procedure_type, status, color
        ) VALUES (
-         $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,COALESCE($11,'GEPLANT'),$12
+         $1,$2,$3,$4,$5,$6,$7,$8,$9,COALESCE($10,'GEPLANT'),$11
        )
        RETURNING *`,
-      [tenantCtx.id, rid, start, end, patient_id ? Number(patient_id) : null, appointment_id ? Number(appointment_id) : null, note || null,
-       docId ? Number(docId) : null, Array.isArray(staff_ids) && staff_ids.length ? staff_ids.map(Number) : null,
+      [rid, start, end, patient_id || null, appointment_id || null, note || null,
+       docId || null, Array.isArray(staff_ids) && staff_ids.length ? staff_ids : null,
        procedure_type || null, status || null, color || null]
     );
     const created = rows[0];
@@ -2531,7 +2527,7 @@ app.post('/api/rooms/bookings', authenticateToken, requireRole('admin','doctor',
           try {
             await tasksService.createTask(tenantCtx, {
               title, description: desc, type: 'ROOM_BOOKING', priority: 'LOW',
-              assigned_to_user_id: Number(sid), due_date: created.start_time, patient_id: created.patient_id,
+              assigned_to_user_id: sid, due_date: created.start_time, patient_id: created.patient_id,
               related_appointment_id: created.appointment_id, tags: ['ROOM','BOOKING','STAFF']
             }, req.user?.id || null);
           } catch (_) {}
@@ -2548,8 +2544,8 @@ app.post('/api/rooms/bookings', authenticateToken, requireRole('admin','doctor',
 app.patch('/api/rooms/bookings/:id', authenticateToken, requireRole('admin','doctor','assistant'), async (req, res) => {
   try {
     const tenantCtx = await ensureRequestTenant(req);
-    const id = Number(req.params.id);
-    const existingRes = await tenantCtx.db.query(`SELECT * FROM room_bookings WHERE tenant_id = $1 AND id = $2`, [tenantCtx.id, id]);
+    const id = req.params.id;
+    const existingRes = await tenantCtx.db.query(`SELECT * FROM room_bookings WHERE booking_id = $1`, [id]);
     if (!existingRes.rowCount) return res.status(404).json({ message: 'Buchung nicht gefunden' });
     const existing = existingRes.rows[0];
     const start = req.body?.start_time ? new Date(req.body.start_time) : new Date(existing.start_time);
@@ -2557,38 +2553,38 @@ app.patch('/api/rooms/bookings/:id', authenticateToken, requireRole('admin','doc
     if (!(end > start)) return res.status(400).json({ message: 'Ungültiger Zeitraum' });
     // overlap check
     const { rows: ov } = await tenantCtx.db.query(
-      `SELECT id FROM room_bookings
-        WHERE tenant_id = $1 AND room_id = $2 AND id <> $3
-          AND start_time < $4 AND end_time > $5
+      `SELECT booking_id FROM room_bookings
+        WHERE room_id = $1 AND booking_id <> $2
+          AND start_time < $3 AND end_time > $4
         LIMIT 1`,
-      [tenantCtx.id, Number(existing.room_id), id, end, start]
+      [existing.room_id, id, end, start]
     );
     if (ov.length) return res.status(409).json({ message: 'Zeitraum ist bereits belegt' });
     const fields = [];
-    const params = [tenantCtx.id, id];
+    const params = [id];
     let i = params.length;
     const set = (col, val) => { fields.push(`${col} = $${++i}`); params.push(val); };
     if (req.body?.start_time !== undefined) set('start_time', start);
     if (req.body?.end_time !== undefined) set('end_time', end);
-    if (req.body?.patient_id !== undefined) set('patient_id', req.body.patient_id ? Number(req.body.patient_id) : null);
-    if (req.body?.appointment_id !== undefined) set('appointment_id', req.body.appointment_id ? Number(req.body.appointment_id) : null);
+    if (req.body?.patient_id !== undefined) set('patient_id', req.body.patient_id || null);
+    if (req.body?.appointment_id !== undefined) set('appointment_id', req.body.appointment_id || null);
     if (req.body?.note !== undefined) set('note', req.body.note || null);
-    if (req.body?.doctor_id !== undefined) set('doctor_id', req.body.doctor_id ? Number(req.body.doctor_id) : null);
-    if (req.body?.staff_ids !== undefined) set('staff_ids', Array.isArray(req.body.staff_ids) ? req.body.staff_ids.map(Number) : null);
+    if (req.body?.doctor_id !== undefined) set('doctor_id', req.body.doctor_id || null);
+    if (req.body?.staff_ids !== undefined) set('staff_ids', Array.isArray(req.body.staff_ids) ? req.body.staff_ids : null);
     if (req.body?.procedure_type !== undefined) set('procedure_type', req.body.procedure_type || null);
     if (req.body?.status !== undefined) set('status', req.body.status || 'GEPLANT');
     if (req.body?.color !== undefined) set('color', req.body.color || null);
     if (!fields.length) return res.status(400).json({ message: 'keine Änderungen' });
     const { rows } = await tenantCtx.db.query(
       `UPDATE room_bookings SET ${fields.join(', ')}, updated_at = now()
-        WHERE tenant_id = $1 AND id = $2
+        WHERE booking_id = $1
         RETURNING *`,
       params
     );
     const updated = rows[0];
     // Notify doctor/staff via internal task(s)
     try {
-      const rres = await tenantCtx.db.query(`SELECT name FROM rooms WHERE tenant_id = $1 AND id = $2`, [tenantCtx.id, Number(updated.room_id)]);
+      const rres = await tenantCtx.db.query(`SELECT name FROM rooms WHERE room_id = $1`, [updated.room_id]);
       const roomName = rres.rows[0]?.name || `#${updated.room_id}`;
       const title = `Buchung aktualisiert: ${roomName}`;
       const desc = `Neuer Zeitraum: ${new Date(updated.start_time).toLocaleString('de-CH')} – ${new Date(updated.end_time).toLocaleString('de-CH')}`;
@@ -2604,7 +2600,7 @@ app.patch('/api/rooms/bookings/:id', authenticateToken, requireRole('admin','doc
           try {
             await tasksService.createTask(tenantCtx, {
               title, description: desc, type: 'ROOM_BOOKING_UPDATE', priority: 'LOW',
-              assigned_to_user_id: Number(sid), due_date: updated.start_time, patient_id: updated.patient_id,
+              assigned_to_user_id: sid, due_date: updated.start_time, patient_id: updated.patient_id,
               related_appointment_id: updated.appointment_id, tags: ['ROOM','BOOKING','UPDATE','STAFF']
             }, req.user?.id || null);
           } catch (_) {}
@@ -2621,8 +2617,8 @@ app.patch('/api/rooms/bookings/:id', authenticateToken, requireRole('admin','doc
 app.delete('/api/rooms/bookings/:id', authenticateToken, requireRole('admin','doctor'), async (req, res) => {
   try {
     const tenantCtx = await ensureRequestTenant(req);
-    const id = Number(req.params.id);
-    const { rowCount } = await tenantCtx.db.query(`DELETE FROM room_bookings WHERE tenant_id = $1 AND id = $2`, [tenantCtx.id, id]);
+    const id = req.params.id;
+    const { rowCount } = await tenantCtx.db.query(`DELETE FROM room_bookings WHERE booking_id = $1`, [id]);
     if (!rowCount) return res.status(404).json({ message: 'Buchung nicht gefunden' });
     res.json({ ok: true });
   } catch (err) {
@@ -2634,26 +2630,26 @@ app.delete('/api/rooms/bookings/:id', authenticateToken, requireRole('admin','do
 app.get('/api/bookings', authenticateToken, requireRole('admin','arzt','assistenz','doctor','assistant'), async (req, res) => {
   try {
     const tenantCtx = await ensureRequestTenant(req);
-    const roomId = req.query.roomId ? Number(req.query.roomId) : null;
+    const roomId = req.query.roomId || null;
     const from = req.query.from ? new Date(String(req.query.from)) : null;
     const to   = req.query.to ? new Date(String(req.query.to)) : null;
     const doctorIdParam = req.query.doctorId || req.query.doctor_id || null;
     const staffIdParam = req.query.staffId || req.query.staff_id || null;
     const me = String(doctorIdParam || '').toLowerCase() === 'me';
-    const doctorId = me ? (req.user?.id || null) : (doctorIdParam != null ? Number(doctorIdParam) : null);
-    const staffId = (String(staffIdParam || '').toLowerCase() === 'me') ? (req.user?.id || null) : (staffIdParam != null ? Number(staffIdParam) : null);
+    const doctorId = me ? (req.user?.id || null) : (doctorIdParam != null ? doctorIdParam : null);
+    const staffId = (String(staffIdParam || '').toLowerCase() === 'me') ? (req.user?.id || null) : (staffIdParam != null ? staffIdParam : null);
     if (!from || !to || isNaN(from.getTime()) || isNaN(to.getTime())) {
       return res.status(400).json({ message: 'from und to erforderlich' });
     }
-    const params = [tenantCtx.id, to, from];
-    let where = 'b.tenant_id = $1 AND b.start_time < $2 AND b.end_time > $3';
+    const params = [to, from];
+    let where = 'b.start_time < $1 AND b.end_time > $2';
     if (roomId) { params.push(roomId); where += ` AND b.room_id = $${params.length}`; }
-    if (doctorId) { params.push(Number(doctorId)); where += ` AND b.doctor_id = $${params.length}`; }
-    if (staffId) { params.push(Number(staffId)); where += ` AND $${params.length} = ANY(b.staff_ids)`; }
+    if (doctorId) { params.push(doctorId); where += ` AND b.doctor_id = $${params.length}`; }
+    if (staffId) { params.push(staffId); where += ` AND $${params.length} = ANY(b.staff_ids)`; }
     const { rows } = await tenantCtx.db.query(
-      `SELECT b.*, p.vorname, p.nachname
+      `SELECT b.*, p.first_name AS vorname, p.last_name AS nachname
          FROM room_bookings b
-         LEFT JOIN patients p ON p.id = b.patient_id AND p.tenant_id = b.tenant_id
+         LEFT JOIN patients p ON p.patient_id = b.patient_id
         WHERE ${where}
         ORDER BY b.start_time ASC`,
       params
@@ -2668,25 +2664,25 @@ app.post('/api/bookings', authenticateToken, requireRole('admin','doctor','assis
   try {
     const tenantCtx = await ensureRequestTenant(req);
     const { room_id, start_time, end_time, patient_id, appointment_id, note, doctor_id, staff_ids, procedure_type, status, color, ignore_doctor_conflicts } = req.body || {};
-    const rid = Number(room_id);
+    const rid = room_id;
     const start = new Date(start_time);
     const end = new Date(end_time);
     if (!rid || !start_time || !end_time || isNaN(start.getTime()) || isNaN(end.getTime()) || !(end > start)) {
       return res.status(400).json({ message: 'Ungültige Zeit oder room_id' });
     }
-    const r = await tenantCtx.db.query(`SELECT id, name FROM rooms WHERE tenant_id = $1 AND id = $2 AND active = true`, [tenantCtx.id, rid]);
-    if (!r.rowCount) return res.status(404).json({ message: 'Raum nicht gefunden' });
+    const r = await tenantCtx.db.query(`SELECT room_id, name FROM rooms WHERE room_id = $1 AND is_active = true`, [rid]);
+    if (!r.rowCount) return res.status(404).json({ message: 'Raum nicht gefunden' });  
     const roomName = r.rows[0].name;
     const { rows: ov } = await tenantCtx.db.query(
-      `SELECT id FROM room_bookings WHERE tenant_id = $1 AND room_id = $2 AND start_time < $3 AND end_time > $4 LIMIT 1`,
-      [tenantCtx.id, rid, end, start]
+      `SELECT booking_id FROM room_bookings WHERE room_id = $1 AND start_time < $2 AND end_time > $3 LIMIT 1`,
+      [rid, end, start]
     );
     if (ov.length) return res.status(409).json({ message: 'Zeitraum ist bereits belegt' });
-    const docId = doctor_id ? Number(doctor_id) : (req.user?.id || null);
+    const docId = doctor_id || (req.user?.id || null);
     if (docId) {
       const dconf = await tenantCtx.db.query(
-        `SELECT id FROM room_bookings WHERE tenant_id = $1 AND doctor_id = $2 AND start_time < $3 AND end_time > $4 LIMIT 1`,
-        [tenantCtx.id, Number(docId), end, start]
+        `SELECT booking_id FROM room_bookings WHERE doctor_id = $1 AND start_time < $2 AND end_time > $3 LIMIT 1`,
+        [docId, end, start]
       );
       if (dconf.rows.length && String(ignore_doctor_conflicts || '').toLowerCase() !== 'true') {
         return res.status(409).json({ message: 'Der ausgewählte Arzt ist im Zeitraum bereits verplant', code: 'doctor_conflict' });
@@ -2694,13 +2690,13 @@ app.post('/api/bookings', authenticateToken, requireRole('admin','doctor','assis
     }
     const { rows } = await tenantCtx.db.query(
       `INSERT INTO room_bookings (
-         tenant_id, room_id, start_time, end_time, patient_id, appointment_id, note,
+         room_id, start_time, end_time, patient_id, appointment_id, note,
          doctor_id, staff_ids, procedure_type, status, color
        ) VALUES (
-         $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,COALESCE($11,'GEPLANT'),$12
+         $1,$2,$3,$4,$5,$6,$7,$8,$9,COALESCE($10,'GEPLANT'),$11
        ) RETURNING *`,
-      [tenantCtx.id, rid, start, end, patient_id ? Number(patient_id) : null, appointment_id ? Number(appointment_id) : null, note || null,
-       docId ? Number(docId) : null, Array.isArray(staff_ids) && staff_ids.length ? staff_ids.map(Number) : null,
+      [rid, start, end, patient_id || null, appointment_id || null, note || null,
+       docId || null, Array.isArray(staff_ids) && staff_ids.length ? staff_ids : null,
        procedure_type || null, status || null, color || null]
     );
     const created = rows[0];
@@ -2712,7 +2708,7 @@ app.post('/api/bookings', authenticateToken, requireRole('admin','doctor','assis
       }
       if (Array.isArray(created.staff_ids)) {
         for (const sid of created.staff_ids) {
-          try { await tasksService.createTask(tenantCtx, { title, description: desc, type: 'ROOM_BOOKING', priority: 'LOW', assigned_to_user_id: Number(sid), due_date: created.start_time, patient_id: created.patient_id, related_appointment_id: created.appointment_id, tags: ['ROOM','BOOKING','STAFF'] }, req.user?.id || null); } catch (_) {}
+          try { await tasksService.createTask(tenantCtx, { title, description: desc, type: 'ROOM_BOOKING', priority: 'LOW', assigned_to_user_id: sid, due_date: created.start_time, patient_id: created.patient_id, related_appointment_id: created.appointment_id, tags: ['ROOM','BOOKING','STAFF'] }, req.user?.id || null); } catch (_) {}
         }
       }
     } catch (_) {}
@@ -2725,46 +2721,46 @@ app.post('/api/bookings', authenticateToken, requireRole('admin','doctor','assis
 app.put('/api/bookings/:id', authenticateToken, requireRole('admin','doctor','assistant'), async (req, res) => {
   try {
     const tenantCtx = await ensureRequestTenant(req);
-    const id = Number(req.params.id);
-    const existingRes = await tenantCtx.db.query(`SELECT * FROM room_bookings WHERE tenant_id = $1 AND id = $2`, [tenantCtx.id, id]);
+    const id = req.params.id;
+    const existingRes = await tenantCtx.db.query(`SELECT * FROM room_bookings WHERE booking_id = $1`, [id]);
     if (!existingRes.rowCount) return res.status(404).json({ message: 'Buchung nicht gefunden' });
     const existing = existingRes.rows[0];
     const start = req.body?.start_time ? new Date(req.body.start_time) : new Date(existing.start_time);
     const end = req.body?.end_time ? new Date(req.body.end_time) : new Date(existing.end_time);
     if (!(end > start)) return res.status(400).json({ message: 'Ungültiger Zeitraum' });
     const { rows: ov } = await tenantCtx.db.query(
-      `SELECT id FROM room_bookings WHERE tenant_id = $1 AND room_id = $2 AND id <> $3 AND start_time < $4 AND end_time > $5 LIMIT 1`,
-      [tenantCtx.id, Number(existing.room_id), id, end, start]
+      `SELECT booking_id FROM room_bookings WHERE room_id = $1 AND booking_id <> $2 AND start_time < $3 AND end_time > $4 LIMIT 1`,
+      [existing.room_id, id, end, start]
     );
     if (ov.length) return res.status(409).json({ message: 'Zeitraum ist bereits belegt' });
-    const nextDoctorId = req.body?.doctor_id != null ? (req.body.doctor_id ? Number(req.body.doctor_id) : null) : (existing.doctor_id || null);
+    const nextDoctorId = req.body?.doctor_id != null ? (req.body.doctor_id || null) : (existing.doctor_id || null);
     if (nextDoctorId) {
       const ignoreDoc = String(req.body?.ignore_doctor_conflicts || '').toLowerCase() === 'true';
       const dconf = await tenantCtx.db.query(
-        `SELECT id FROM room_bookings WHERE tenant_id = $1 AND doctor_id = $2 AND id <> $3 AND start_time < $4 AND end_time > $5 LIMIT 1`,
-        [tenantCtx.id, Number(nextDoctorId), id, end, start]
+        `SELECT booking_id FROM room_bookings WHERE doctor_id = $1 AND booking_id <> $2 AND start_time < $3 AND end_time > $4 LIMIT 1`,
+        [nextDoctorId, id, end, start]
       );
       if (dconf.rows.length && !ignoreDoc) {
         return res.status(409).json({ message: 'Der ausgewählte Arzt ist im Zeitraum bereits verplant', code: 'doctor_conflict' });
       }
     }
     const fields = [];
-    const params = [tenantCtx.id, id];
+    const params = [id];
     let i = params.length;
     const set = (col, val) => { fields.push(`${col} = $${++i}`); params.push(val); };
     if (req.body?.start_time !== undefined) set('start_time', start);
     if (req.body?.end_time !== undefined) set('end_time', end);
-    if (req.body?.patient_id !== undefined) set('patient_id', req.body.patient_id ? Number(req.body.patient_id) : null);
-    if (req.body?.appointment_id !== undefined) set('appointment_id', req.body.appointment_id ? Number(req.body.appointment_id) : null);
+    if (req.body?.patient_id !== undefined) set('patient_id', req.body.patient_id || null);
+    if (req.body?.appointment_id !== undefined) set('appointment_id', req.body.appointment_id || null);
     if (req.body?.note !== undefined) set('note', req.body.note || null);
-    if (req.body?.doctor_id !== undefined) set('doctor_id', req.body.doctor_id ? Number(req.body.doctor_id) : null);
-    if (req.body?.staff_ids !== undefined) set('staff_ids', Array.isArray(req.body.staff_ids) ? req.body.staff_ids.map(Number) : null);
+    if (req.body?.doctor_id !== undefined) set('doctor_id', req.body.doctor_id || null);
+    if (req.body?.staff_ids !== undefined) set('staff_ids', Array.isArray(req.body.staff_ids) ? req.body.staff_ids : null);
     if (req.body?.procedure_type !== undefined) set('procedure_type', req.body.procedure_type || null);
     if (req.body?.status !== undefined) set('status', req.body.status || 'GEPLANT');
     if (req.body?.color !== undefined) set('color', req.body.color || null);
     if (!fields.length) return res.status(400).json({ message: 'keine Änderungen' });
     const { rows } = await tenantCtx.db.query(
-      `UPDATE room_bookings SET ${fields.join(', ')}, updated_at = now() WHERE tenant_id = $1 AND id = $2 RETURNING *`,
+      `UPDATE room_bookings SET ${fields.join(', ')}, updated_at = now() WHERE booking_id = $1 RETURNING *`,
       params
     );
     res.json(rows[0]);
@@ -2776,8 +2772,8 @@ app.put('/api/bookings/:id', authenticateToken, requireRole('admin','doctor','as
 app.delete('/api/bookings/:id', authenticateToken, requireRole('admin','doctor'), async (req, res) => {
   try {
     const tenantCtx = await ensureRequestTenant(req);
-    const id = Number(req.params.id);
-    const { rowCount } = await tenantCtx.db.query(`DELETE FROM room_bookings WHERE tenant_id = $1 AND id = $2`, [tenantCtx.id, id]);
+    const id = req.params.id;
+    const { rowCount } = await tenantCtx.db.query(`DELETE FROM room_bookings WHERE booking_id = $1`, [id]);
     if (!rowCount) return res.status(404).json({ message: 'Buchung nicht gefunden' });
     res.json({ ok: true });
   } catch (err) {
@@ -2793,8 +2789,8 @@ app.get('/api/inventory/items', authenticateToken, requireRole('admin','arzt','a
   try {
     const tenantCtx = await ensureRequestTenant(req);
     const q = req.query || {};
-    const params = [tenantCtx.id];
-    let where = 'tenant_id = $1';
+    const params = [];
+    let where = 'deleted_at IS NULL';
     if (q.search) { params.push(likeSearch(q.search)); where += ` AND lower(name) LIKE $${params.length}`; }
     if (String(q.lowStockOnly || '').toLowerCase() === 'true') {
       where += ' AND current_stock < min_stock';
@@ -2816,10 +2812,10 @@ app.post('/api/inventory/items', authenticateToken, requireRole('admin','doctor'
     const { name, category, min_stock = 0, current_stock = 0, unit } = req.body || {};
     if (!name) return res.status(400).json({ message: 'name fehlt' });
     const { rows } = await tenantCtx.db.query(
-      `INSERT INTO inventory_items (tenant_id, name, category, min_stock, current_stock, unit, last_updated_by)
-       VALUES ($1,$2,$3, GREATEST(0,$4), GREATEST(0,$5), $6, $7)
+      `INSERT INTO inventory_items (name, category, min_stock, current_stock, unit, last_updated_by)
+       VALUES ($1,$2, GREATEST(0,$3), GREATEST(0,$4), $5, $6)
        RETURNING *`,
-      [tenantCtx.id, String(name), category || null, Number(min_stock) || 0, Number(current_stock) || 0, unit || null, Number(req.user?.id) || null]
+      [String(name), category || null, Number(min_stock) || 0, Number(current_stock) || 0, unit || null, req.user?.id || null]
     );
     res.status(201).json(rows[0]);
   } catch (err) {
@@ -2831,11 +2827,11 @@ app.post('/api/inventory/items', authenticateToken, requireRole('admin','doctor'
 app.patch('/api/inventory/items/:id', authenticateToken, requireRole('admin','doctor'), async (req, res) => {
   try {
     const tenantCtx = await ensureRequestTenant(req);
-    const id = Number(req.params.id);
-    const existing = await tenantCtx.db.query(`SELECT * FROM inventory_items WHERE tenant_id = $1 AND id = $2`, [tenantCtx.id, id]);
+    const id = req.params.id;
+    const existing = await tenantCtx.db.query(`SELECT * FROM inventory_items WHERE item_id = $1`, [id]);
     if (!existing.rowCount) return res.status(404).json({ message: 'Item nicht gefunden' });
     const fields = [];
-    const params = [tenantCtx.id, id];
+    const params = [id];
     let i = params.length;
     const set = (col, val) => { fields.push(`${col} = $${++i}`); params.push(val); };
     if (req.body?.name !== undefined) set('name', String(req.body.name));
@@ -2843,10 +2839,10 @@ app.patch('/api/inventory/items/:id', authenticateToken, requireRole('admin','do
     if (req.body?.min_stock !== undefined) set('min_stock', Math.max(0, Number(req.body.min_stock) || 0));
     if (req.body?.unit !== undefined) set('unit', req.body.unit || null);
     if (!fields.length) return res.status(400).json({ message: 'keine Änderungen' });
-    set('last_updated_by', Number(req.user?.id) || null);
-    set('last_updated_at', new Date());
+    set('last_updated_by', req.user?.id || null);
+    set('updated_at', new Date());
     const { rows } = await tenantCtx.db.query(
-      `UPDATE inventory_items SET ${fields.join(', ')} WHERE tenant_id = $1 AND id = $2 RETURNING *`,
+      `UPDATE inventory_items SET ${fields.join(', ')} WHERE item_id = $1 RETURNING *`,
       params
     );
     res.json(rows[0]);
@@ -2860,12 +2856,11 @@ async function ensureLowStockTask(tenantCtx, item) {
     if (item.current_stock >= item.min_stock) return;
     const dup = await tenantCtx.db.query(
       `SELECT 1 FROM tasks
-        WHERE tenant_id = $1
-          AND type = 'INVENTORY'
-          AND status IN ('OPEN','IN_PROGRESS')
-          AND lower(title) LIKE $2
+        WHERE status IN ('open','in_progress')
+          AND deleted_at IS NULL
+          AND lower(title) LIKE $1
         LIMIT 1`,
-      [tenantCtx.id, `%${String(item.name||'').toLowerCase()}%`]
+      [`%${String(item.name||'').toLowerCase()}%`]
     );
     if (dup.rowCount) return;
     await tasksService.createTask(tenantCtx, {
@@ -2882,25 +2877,25 @@ async function ensureLowStockTask(tenantCtx, item) {
 app.post('/api/inventory/items/:id/adjust', authenticateToken, requireRole('admin','doctor','assistant'), async (req, res) => {
   try {
     const tenantCtx = await ensureRequestTenant(req);
-    const id = Number(req.params.id);
+    const id = req.params.id;
     const delta = Number(req.body?.delta);
     const reason = req.body?.reason || null;
     if (!Number.isFinite(delta)) return res.status(400).json({ message: 'delta fehlt/ungültig' });
     const { rows: updatedRows } = await tenantCtx.db.query(
       `UPDATE inventory_items
-          SET current_stock = GREATEST(0, current_stock + $3),
-              last_updated_by = $4,
-              last_updated_at = now()
-        WHERE tenant_id = $1 AND id = $2
+          SET current_stock = GREATEST(0, current_stock + $2),
+              last_updated_by = $3,
+              updated_at = now()
+        WHERE item_id = $1
         RETURNING *`,
-      [tenantCtx.id, id, delta, Number(req.user?.id) || null]
+      [id, delta, req.user?.id || null]
     );
     if (!updatedRows.length) return res.status(404).json({ message: 'Item nicht gefunden' });
     const item = updatedRows[0];
     await tenantCtx.db.query(
-      `INSERT INTO inventory_transactions (tenant_id, item_id, change_amount, reason, created_by_user_id)
-       VALUES ($1,$2,$3,$4,$5)`,
-      [tenantCtx.id, id, delta, reason, Number(req.user?.id) || null]
+      `INSERT INTO inventory_transactions (item_id, change_amount, reason, created_by)
+       VALUES ($1,$2,$3,$4)`,
+      [id, delta, reason, req.user?.id || null]
     );
     await ensureLowStockTask(tenantCtx, item);
     res.json(item);
@@ -2913,10 +2908,10 @@ app.post('/api/inventory/items/:id/adjust', authenticateToken, requireRole('admi
 app.get('/api/inventory/items/:id/transactions', authenticateToken, requireRole('admin','arzt','assistenz','doctor','assistant'), async (req, res) => {
   try {
     const tenantCtx = await ensureRequestTenant(req);
-    const id = Number(req.params.id);
+    const id = req.params.id;
     const { rows } = await tenantCtx.db.query(
-      `SELECT * FROM inventory_transactions WHERE tenant_id = $1 AND item_id = $2 ORDER BY created_at DESC, id DESC`,
-      [tenantCtx.id, id]
+      `SELECT * FROM inventory_transactions WHERE item_id = $1 ORDER BY created_at DESC, transaction_id DESC`,
+      [id]
     );
     res.json({ items: rows });
   } catch (err) {
@@ -2929,13 +2924,16 @@ app.get('/api/sops', authenticateToken, requireRole('admin','arzt','assistenz','
   try {
     const tenantCtx = await ensureRequestTenant(req);
     const q = req.query || {};
-    const params = [tenantCtx.id];
-    let where = 'tenant_id = $1';
+    // TODO: sops table does not exist in V2 schema – queries will fail gracefully
+    const params = [];
+    let where = 'TRUE';
     if (q.search) { params.push(`%${String(q.search).toLowerCase()}%`); where += ` AND lower(title) LIKE $${params.length}`; }
     const { rows } = await tenantCtx.db.query(`SELECT * FROM sops WHERE ${where} ORDER BY locked DESC, updated_at DESC` , params);
     res.json({ items: rows });
   } catch (err) {
-    res.status(500).json({ message: 'SOPs konnten nicht geladen werden' });
+    // sops table does not exist in V2 – return empty list
+    console.warn('GET /api/sops failed (table may not exist):', err?.message);
+    res.json({ items: [] });
   }
 });
 
@@ -2943,34 +2941,34 @@ app.get('/api/sops', authenticateToken, requireRole('admin','arzt','assistenz','
 app.get('/api/chat/channels', authenticateToken, requireRole('admin','arzt','assistenz','doctor','assistant'), async (req, res) => {
   try {
     const t = await ensureRequestTenant(req);
-    const uid = Number(req.user?.id);
+    const uid = req.user?.id;
     // Only return DM channels where user is a member, plus all non-DM channels
     const { rows } = await t.db.query(
       `SELECT c.*
          FROM chat_channels c
          LEFT JOIN chat_channel_members m
-           ON m.channel_id = c.id AND m.tenant_id = c.tenant_id AND m.user_id = $2
-        WHERE c.tenant_id = $1
-          AND (c.type <> 'DM' OR m.user_id IS NOT NULL)
+           ON m.channel_id = c.channel_id AND m.user_id = $1
+        WHERE c.deleted_at IS NULL
+          AND (c.type <> 'direct' OR m.user_id IS NOT NULL)
         ORDER BY c.type, c.name`,
-      [t.id, uid]
+      [uid]
     );
 
     // Ensure a GLOBAL default exists (once per tenant)
     if (!rows.length) {
-      const existing = await t.db.query(`SELECT 1 FROM chat_channels WHERE tenant_id = $1 AND type = 'GLOBAL' AND name = 'Allgemein' LIMIT 1`, [t.id]);
+      const existing = await t.db.query(`SELECT 1 FROM chat_channels WHERE type = 'global' AND name = 'Allgemein' AND deleted_at IS NULL LIMIT 1`);
       if (!existing.rowCount) {
-        try { await t.db.query(`INSERT INTO chat_channels (tenant_id, name, type) VALUES ($1,$2,'GLOBAL')`, [t.id, 'Allgemein']); } catch (_) {}
+        try { await t.db.query(`INSERT INTO chat_channels (name, type, created_by) VALUES ($1,'global',$2)`, ['Allgemein', uid]); } catch (_) {}
       }
       const re = await t.db.query(
         `SELECT c.*
            FROM chat_channels c
            LEFT JOIN chat_channel_members m
-             ON m.channel_id = c.id AND m.tenant_id = c.tenant_id AND m.user_id = $2
-          WHERE c.tenant_id = $1
-            AND (c.type <> 'DM' OR m.user_id IS NOT NULL)
+             ON m.channel_id = c.channel_id AND m.user_id = $1
+          WHERE c.deleted_at IS NULL
+            AND (c.type <> 'direct' OR m.user_id IS NOT NULL)
           ORDER BY c.type, c.name`,
-        [t.id, uid]
+        [uid]
       );
       return res.json({ items: re.rows });
     }
@@ -2984,11 +2982,11 @@ app.get('/api/chat/channels', authenticateToken, requireRole('admin','arzt','ass
 app.post('/api/chat/channels', authenticateToken, requireRole('admin','doctor'), async (req, res) => {
   try {
     const t = await ensureRequestTenant(req);
-    const { name, type = 'GLOBAL', related_patient_id, related_task_id } = req.body || {};
+    const { name, type = 'global' } = req.body || {};
     if (!name) return res.status(400).json({ message: 'name fehlt' });
     const { rows } = await t.db.query(
-      `INSERT INTO chat_channels (tenant_id, name, type, related_patient_id, related_task_id) VALUES ($1,$2,$3,$4,$5) RETURNING *`,
-      [t.id, String(name), String(type).toUpperCase(), related_patient_id ? Number(related_patient_id) : null, related_task_id ? Number(related_task_id) : null]
+      `INSERT INTO chat_channels (name, type, created_by) VALUES ($1,$2,$3) RETURNING *`,
+      [String(name), String(type).toLowerCase(), req.user?.id || null]
     );
     res.status(201).json(rows[0]);
   } catch (e) {
@@ -2999,19 +2997,19 @@ app.post('/api/chat/channels', authenticateToken, requireRole('admin','doctor'),
 app.get('/api/chat/messages', authenticateToken, requireRole('admin','arzt','assistenz','doctor','assistant'), async (req, res) => {
   try {
     const t = await ensureRequestTenant(req);
-    const channelId = Number(req.query.channelId);
+    const channelId = req.query.channelId ? String(req.query.channelId).trim() : null;
     let limit = Number(req.query.limit || 100);
     if (!Number.isFinite(limit) || limit <= 0) limit = 100;
     limit = Math.min(limit, 500);
     if (!channelId) return res.json({ items: [] });
     const { rows } = await t.db.query(
-      `SELECT m.*, u.name AS author_name
+      `SELECT m.*, u.display_name AS author_name
          FROM chat_messages m
-         LEFT JOIN users u ON u.id = m.author_user_id AND u.tenant_id = m.tenant_id
-        WHERE m.tenant_id = $1 AND m.channel_id = $2
+         LEFT JOIN users u ON u.user_id = m.user_id
+        WHERE m.channel_id = $1 AND m.deleted_at IS NULL
         ORDER BY m.created_at DESC
         LIMIT ${limit}`,
-      [t.id, channelId]
+      [channelId]
     );
     res.json({ items: rows.reverse() });
   } catch (e) {
@@ -3033,58 +3031,34 @@ app.post('/api/chat/messages', authenticateToken, requireRole('admin','arzt','as
     const { channel_id, content } = req.body || {};
     if (!channel_id || !content) return res.status(400).json({ message: 'channel_id oder content fehlt' });
     const { rows } = await t.db.query(
-      `INSERT INTO chat_messages (tenant_id, channel_id, author_user_id, content)
-       VALUES ($1,$2,$3,$4)
+      `INSERT INTO chat_messages (channel_id, user_id, content)
+       VALUES ($1,$2,$3)
        RETURNING *`,
-      [t.id, Number(channel_id), Number(req.user?.id) || null, String(content)]
+      [channel_id, req.user?.id || null, String(content)]
     );
     const msg = rows[0];
     // Grundsätzlich: alle Empfänger (außer Sender) bekommen einen offenen "unread"-Eintrag
     try {
-      const uid = Number(req.user?.id);
+      const uid = req.user?.id;
       // Bevorzugt Kanal-Mitglieder, sonst alle aktiven Benutzer im Tenant
       let recipients = [];
       const membersRes = await t.db.query(
-        `SELECT user_id FROM chat_channel_members WHERE tenant_id = $1 AND channel_id = $2`,
-        [t.id, Number(channel_id)]
+        `SELECT user_id FROM chat_channel_members WHERE channel_id = $1`,
+        [channel_id]
       );
       if (membersRes.rowCount) {
-        recipients = membersRes.rows.map(r => Number(r.user_id));
+        recipients = membersRes.rows.map(r => r.user_id);
       } else {
         const usersRes = await t.db.query(
-          `SELECT id FROM users WHERE tenant_id = $1`,
-          [t.id]
+          `SELECT user_id FROM users WHERE deleted_at IS NULL`,
+          []
         );
-        recipients = usersRes.rows.map(r => Number(r.id));
+        recipients = usersRes.rows.map(r => r.user_id);
       }
-      for (const rid of recipients) {
-        if (!rid || rid === uid) continue;
-        await t.db.query(
-          `INSERT INTO chat_message_reads (message_id, user_id, tenant_id)
-           VALUES ($1,$2,$3)
-           ON CONFLICT DO NOTHING`,
-          [msg.id, rid, t.id]
-        );
-      }
+      // TODO: chat_message_reads does not exist in V2 – unread tracking disabled
     } catch (_) {}
 
-    // Mentions → zusätzlich unread-Einträge (z. B. für GLOBAL‑Kanäle ohne explizite Mitglieder)
-    try {
-      const names = parseMentions(content);
-      if (names.length) {
-        const { rows: users } = await t.db.query(`SELECT id, username, email FROM users WHERE tenant_id = $1 AND (lower(username) = ANY($2) OR lower(email) = ANY($2))`, [t.id, names]);
-        let allowed = users;
-        const { rows: members } = await t.db.query(`SELECT user_id FROM chat_channel_members WHERE tenant_id = $1 AND channel_id = $2`, [t.id, Number(channel_id)]);
-        if (members.length) {
-          const set = new Set(members.map(m => Number(m.user_id)));
-          allowed = users.filter(u => set.has(Number(u.id)));
-        }
-        for (const u of allowed) {
-          if (Number(u.id) === Number(req.user?.id)) continue;
-          await t.db.query(`INSERT INTO chat_message_reads (message_id, user_id, tenant_id) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING`, [msg.id, u.id, t.id]);
-        }
-      }
-    } catch (_) {}
+    // TODO: Mentions unread tracking disabled – chat_message_reads does not exist in V2 schema
     res.status(201).json(msg);
   } catch (e) {
     res.status(400).json({ message: 'Nachricht konnte nicht gesendet werden' });
@@ -3094,12 +3068,12 @@ app.post('/api/chat/messages', authenticateToken, requireRole('admin','arzt','as
 app.post('/api/chat/messages/:id/read', authenticateToken, requireRole('admin','arzt','assistenz','doctor','assistant'), async (req, res) => {
   try {
     const t = await ensureRequestTenant(req);
-    const id = Number(req.params.id);
+    const id = req.params.id;
     await t.db.query(
-      `INSERT INTO chat_message_reads (message_id, user_id, tenant_id, read_at)
+      `/* TODO: chat_message_reads not in V2 */ INSERT INTO chat_message_reads_DISABLED (message_id, user_id, read_at)
        VALUES ($1,$2,$3, now())
        ON CONFLICT (message_id, user_id) DO UPDATE SET read_at = now()`,
-      [id, Number(req.user?.id), t.id]
+      [id, req.user?.id, t.id]
     );
     res.json({ ok: true });
   } catch (e) {
@@ -3110,15 +3084,8 @@ app.post('/api/chat/messages/:id/read', authenticateToken, requireRole('admin','
 app.get('/api/chat/unreadCount', authenticateToken, requireRole('admin','arzt','assistenz','doctor','assistant'), async (req, res) => {
   try {
     const t = await ensureRequestTenant(req);
-    const channelId = req.query?.channelId ? Number(req.query.channelId) : null;
-    let sql = `SELECT COUNT(1) AS cnt
-                 FROM chat_message_reads r
-                 JOIN chat_messages m ON m.id = r.message_id
-                WHERE r.tenant_id = $1 AND r.user_id = $2 AND r.read_at IS NULL`;
-    const params = [t.id, Number(req.user?.id)];
-    if (channelId) { sql += ` AND m.channel_id = $3`; params.push(channelId); }
-    const { rows } = await t.db.query(sql, params);
-    res.json({ count: Number(rows[0]?.cnt || 0) });
+    // TODO: chat_message_reads does not exist in V2 schema – return 0
+    res.json({ count: 0 });
   } catch (e) {
     res.status(500).json({ message: 'Unread Count nicht möglich' });
   }
@@ -3140,11 +3107,11 @@ setInterval(cleanupTyping, 5000).unref();
 app.post('/api/chat/typing', authenticateToken, requireRole('admin','arzt','assistenz','doctor','assistant'), async (req, res) => {
   try {
     const t = await ensureRequestTenant(req);
-    const channelId = Number(req.body?.channel_id);
+    const channelId = req.body?.channel_id ? String(req.body.channel_id).trim() : null;
     if (!channelId) return res.status(400).json({ message: 'channel_id fehlt' });
     const key = `${t.id}:${channelId}`;
     const map = chatTypingStore.get(key) || new Map();
-    map.set(Number(req.user?.id), Date.now() + 8000);
+    map.set(req.user?.id, Date.now() + 8000);
     chatTypingStore.set(key, map);
     res.json({ ok: true });
   } catch (e) {
@@ -3155,15 +3122,15 @@ app.post('/api/chat/typing', authenticateToken, requireRole('admin','arzt','assi
 app.get('/api/chat/typing', authenticateToken, requireRole('admin','arzt','assistenz','doctor','assistant'), async (req, res) => {
   try {
     const t = await ensureRequestTenant(req);
-    const channelId = Number(req.query?.channelId);
+    const channelId = req.query?.channelId ? String(req.query.channelId).trim() : null;
     if (!channelId) return res.json({ users: [] });
     cleanupTyping();
     const key = `${t.id}:${channelId}`;
     const map = chatTypingStore.get(key) || new Map();
     const ids = Array.from(map.keys());
     if (!ids.length) return res.json({ users: [] });
-    const { rows } = await t.db.query(`SELECT id, name, username, email FROM users WHERE tenant_id = $1 AND id = ANY($2)`, [t.id, ids]);
-    const users = rows.map(u => ({ id: u.id, name: u.name || u.username || u.email || `User ${u.id}` }));
+    const { rows } = await t.db.query(`SELECT user_id, display_name, email FROM users WHERE deleted_at IS NULL AND user_id = ANY($1)`, [ids]);
+    const users = rows.map(u => ({ id: u.user_id, name: u.display_name || u.email || `User ${u.user_id}` }));
     res.json({ users });
   } catch (e) {
     res.status(500).json({ users: [] });
@@ -3174,25 +3141,25 @@ app.get('/api/chat/typing', authenticateToken, requireRole('admin','arzt','assis
 app.post('/api/chat/dm/start', authenticateToken, requireRole('admin','arzt','assistenz','doctor','assistant'), async (req, res) => {
   try {
     const t = await ensureRequestTenant(req);
-    const uid = Number(req.user?.id);
-    const other = Number(req.body?.user_id);
+    const uid = req.user?.id;
+    const other = req.body?.user_id;
     if (!other || other === uid) return res.status(400).json({ message: 'Ungültiger Zielnutzer' });
     const found = await t.db.query(
-      `SELECT c.id
+      `SELECT c.channel_id
          FROM chat_channels c
-         JOIN chat_channel_members m1 ON m1.channel_id = c.id AND m1.user_id = $2 AND m1.tenant_id = c.tenant_id
-         JOIN chat_channel_members m2 ON m2.channel_id = c.id AND m2.user_id = $3 AND m2.tenant_id = c.tenant_id
-        WHERE c.tenant_id = $1 AND c.type = 'DM'
-        GROUP BY c.id
+         JOIN chat_channel_members m1 ON m1.channel_id = c.channel_id AND m1.user_id = $1
+         JOIN chat_channel_members m2 ON m2.channel_id = c.channel_id AND m2.user_id = $2
+        WHERE c.type = 'direct' AND c.deleted_at IS NULL
+        GROUP BY c.channel_id
         HAVING COUNT(*) = 2`,
-      [t.id, uid, other]
+      [uid, other]
     );
-    let channelId = found.rows[0]?.id;
+    let channelId = found.rows[0]?.channel_id;
     if (!channelId) {
-      const name = `DM:${Math.min(uid, other)}-${Math.max(uid, other)}`;
-      const ins = await t.db.query(`INSERT INTO chat_channels (tenant_id, name, type) VALUES ($1,$2,'DM') RETURNING id`, [t.id, name]);
-      channelId = ins.rows[0].id;
-      await t.db.query(`INSERT INTO chat_channel_members (tenant_id, channel_id, user_id) VALUES ($1,$2,$3),($1,$2,$4) ON CONFLICT DO NOTHING`, [t.id, channelId, uid, other]);
+      const name = `DM:${uid}-${other}`;
+      const ins = await t.db.query(`INSERT INTO chat_channels (name, type, created_by) VALUES ($1,'direct',$2) RETURNING channel_id`, [name, uid]);
+      channelId = ins.rows[0].channel_id;
+      await t.db.query(`INSERT INTO chat_channel_members (channel_id, user_id, role) VALUES ($1,$2,'admin'),($1,$3,'member') ON CONFLICT DO NOTHING`, [channelId, uid, other]);
     }
     res.json({ channel_id: channelId });
   } catch (e) {
@@ -3203,16 +3170,16 @@ app.post('/api/chat/dm/start', authenticateToken, requireRole('admin','arzt','as
 app.get('/api/chat/dm/list', authenticateToken, requireRole('admin','arzt','assistenz','doctor','assistant'), async (req, res) => {
   try {
     const t = await ensureRequestTenant(req);
-    const uid = Number(req.user?.id);
+    const uid = req.user?.id;
     const { rows } = await t.db.query(
-      `SELECT c.id AS channel_id, u.id AS other_user_id, COALESCE(u.name, u.username, u.email) AS other_name
+      `SELECT c.channel_id, u.user_id AS other_user_id, COALESCE(u.display_name, u.email) AS other_name
          FROM chat_channels c
-         JOIN chat_channel_members m1 ON m1.channel_id = c.id AND m1.user_id = $2 AND m1.tenant_id = c.tenant_id
-         JOIN chat_channel_members m2 ON m2.channel_id = c.id AND m2.user_id <> $2 AND m2.tenant_id = c.tenant_id
-         JOIN users u ON u.id = m2.user_id AND u.tenant_id = c.tenant_id
-        WHERE c.tenant_id = $1 AND c.type = 'DM'
-        ORDER BY c.id DESC`,
-      [t.id, uid]
+         JOIN chat_channel_members m1 ON m1.channel_id = c.channel_id AND m1.user_id = $1
+         JOIN chat_channel_members m2 ON m2.channel_id = c.channel_id AND m2.user_id <> $1
+         JOIN users u ON u.user_id = m2.user_id AND u.deleted_at IS NULL
+        WHERE c.type = 'direct' AND c.deleted_at IS NULL
+        ORDER BY c.channel_id DESC`,
+      [uid]
     );
     res.json({ items: rows });
   } catch (e) {
@@ -3224,18 +3191,20 @@ app.get('/api/chat/dm/list', authenticateToken, requireRole('admin','arzt','assi
 app.get('/api/patients/:id/communication', authenticateToken, requirePermission('patients.read', 'admin', 'arzt', 'assistenz', 'doctor', 'assistant', 'billing'), async (req, res) => {
   try {
     const t = await ensureRequestTenant(req);
-    const pid = Number(req.params.id);
+    const pid = req.params.id;
     const { rows } = await t.db.query(
-      `SELECT c.*, u.name AS author_name
+      `SELECT c.*, u.display_name AS author_name
          FROM patient_communication_log c
-         LEFT JOIN users u ON u.id = c.created_by_user_id AND u.tenant_id = c.tenant_id
-        WHERE c.tenant_id = $1 AND c.patient_id = $2
-        ORDER BY c.created_at DESC, c.id DESC`,
-      [t.id, pid]
+         LEFT JOIN users u ON u.user_id = c.created_by
+        WHERE c.patient_id = $1
+        ORDER BY c.created_at DESC, c.log_id DESC`,
+      [pid]
     );
     res.json({ items: rows });
   } catch (e) {
-    res.status(500).json({ message: 'Kommunikationslog konnte nicht geladen werden' });
+    // TODO: patient_communication_log may not exist in V2 – return empty gracefully
+    console.warn('GET /api/patients/:id/communication failed:', e?.message);
+    res.json({ items: [] });
   }
 });
 
@@ -3245,12 +3214,11 @@ app.get('/api/dashboard/tenantSummary', authenticateToken, requireRole('admin','
     const t = await ensureRequestTenant(req);
     const from = req.query.from ? new Date(String(req.query.from)) : new Date(Date.now() - 30*24*60*60*1000);
     const to = req.query.to ? new Date(String(req.query.to)) : new Date();
-    const params = [t.id, from, to];
-
-    const appts = await t.db.query(`SELECT COUNT(1) AS c FROM appointments WHERE tenant_id = $1 AND starts_at >= $2 AND starts_at < $3`, params);
-    const patients = await t.db.query(`SELECT COUNT(1) AS c FROM patients WHERE tenant_id = $1 AND created_at >= $2 AND created_at < $3`, params);
-    const tasksByType = await t.db.query(`SELECT COALESCE(type,'OTHER') AS type, COUNT(1) AS c FROM tasks WHERE tenant_id = $1 AND status IN ('OPEN','IN_PROGRESS') GROUP BY COALESCE(type,'OTHER') ORDER BY 2 DESC`, [t.id]);
-    const overdueTasks = await t.db.query(`SELECT COUNT(1) AS c FROM tasks WHERE tenant_id = $1 AND status IN ('OPEN','IN_PROGRESS') AND due_date IS NOT NULL AND due_date < now()`, [t.id]);
+    const appts = await t.db.query(`SELECT COUNT(1) AS c FROM appointments WHERE start_at >= $1 AND start_at < $2`, [from, to]);
+    const patients = await t.db.query(`SELECT COUNT(1) AS c FROM patients WHERE created_at >= $1 AND created_at < $2`, [from, to]);
+    // V2 tasks table has no `type` column – group by priority instead
+    const tasksByType = await t.db.query(`SELECT COALESCE(priority,'OTHER') AS type, COUNT(1) AS c FROM tasks WHERE status IN ('open','in_progress') AND deleted_at IS NULL GROUP BY COALESCE(priority,'OTHER') ORDER BY 2 DESC`, []);
+    const overdueTasks = await t.db.query(`SELECT COUNT(1) AS c FROM tasks WHERE status IN ('open','in_progress') AND deleted_at IS NULL AND due_date IS NOT NULL AND due_date < now()`, []);
 
     res.json({
       period: { from: from.toISOString(), to: to.toISOString() },
@@ -3268,7 +3236,7 @@ app.get('/api/dashboard/tenantSummary', authenticateToken, requireRole('admin','
 app.get('/api/me/dashboard', authenticateToken, requireRole('admin','arzt','assistenz','doctor','assistant','billing'), async (req, res) => {
   try {
     const t = await ensureRequestTenant(req);
-    const { rows } = await t.db.query(`SELECT widgets FROM user_dashboard_config WHERE tenant_id = $1 AND user_id = $2`, [t.id, Number(req.user?.id)]);
+    const { rows } = await t.db.query(`SELECT widgets FROM user_dashboard_config WHERE user_id = $1`, [req.user?.id]);
     res.json({ widgets: rows[0]?.widgets || [] });
   } catch (e) {
     res.status(500).json({ message: 'Dashboard konnte nicht geladen werden' });
@@ -3277,29 +3245,29 @@ app.get('/api/me/dashboard', authenticateToken, requireRole('admin','arzt','assi
 
 // ====== Workflow Definitions API ======
 app.get('/api/workflows', authenticateToken, requireRole('admin','doctor'), async (req, res) => {
-  try { const t = await ensureRequestTenant(req); const { rows } = await t.db.query(`SELECT * FROM workflow_definitions WHERE tenant_id = $1 ORDER BY updated_at DESC`, [t.id]); res.json({ items: rows }); } catch (e) { res.status(500).json({ message: 'Workflows konnten nicht geladen werden' }); }
+  try { const t = await ensureRequestTenant(req); const { rows } = await t.db.query(`SELECT * FROM workflow_definitions ORDER BY updated_at DESC`, []); res.json({ items: rows }); } catch (e) { res.status(500).json({ message: 'Workflows konnten nicht geladen werden' }); }
 });
 app.post('/api/workflows', authenticateToken, requireRole('admin','doctor'), async (req, res) => {
-  try { const t = await ensureRequestTenant(req); const { name, description, triggerType, isActive = true, definitionJson = [] } = req.body || {}; if (!name || !triggerType) return res.status(400).json({ message: 'name/triggerType fehlt' }); const { rows } = await t.db.query(`INSERT INTO workflow_definitions (tenant_id, name, description, trigger_type, is_active, definition_json) VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`, [t.id, name, description||null, String(triggerType).toUpperCase(), Boolean(isActive), definitionJson]); res.status(201).json(rows[0]); } catch (e) { res.status(400).json({ message: 'Workflow konnte nicht erstellt werden' }); }
+  try { const t = await ensureRequestTenant(req); const { name, description, triggerType, isActive = true, definitionJson = [] } = req.body || {}; if (!name || !triggerType) return res.status(400).json({ message: 'name/triggerType fehlt' }); const { rows } = await t.db.query(`INSERT INTO workflow_definitions (name, description, trigger_type, is_active, definition_json) VALUES ($1,$2,$3,$4,$5) RETURNING *`, [name, description||null, String(triggerType).toUpperCase(), Boolean(isActive), definitionJson]); res.status(201).json(rows[0]); } catch (e) { res.status(400).json({ message: 'Workflow konnte nicht erstellt werden' }); }
 });
 app.patch('/api/workflows/:id', authenticateToken, requireRole('admin','doctor'), async (req, res) => {
-  try { const t = await ensureRequestTenant(req); const id = Number(req.params.id); const fields = []; const params=[t.id,id]; let i=params.length; const set=(c,v)=>{fields.push(`${c}=$${++i}`); params.push(v);}; if (req.body?.name!==undefined) set('name', req.body.name); if (req.body?.description!==undefined) set('description', req.body.description||null); if (req.body?.triggerType!==undefined) set('trigger_type', String(req.body.triggerType).toUpperCase()); if (req.body?.isActive!==undefined) set('is_active', Boolean(req.body.isActive)); if (req.body?.definitionJson!==undefined) set('definition_json', req.body.definitionJson||[]); if (!fields.length) return res.status(400).json({ message: 'keine Änderungen' }); const { rows } = await t.db.query(`UPDATE workflow_definitions SET ${fields.join(', ')}, updated_at = now() WHERE tenant_id = $1 AND id = $2 RETURNING *`, params); res.json(rows[0]); } catch (e) { res.status(400).json({ message: 'Workflow konnte nicht aktualisiert werden' }); }
+  try { const t = await ensureRequestTenant(req); const id = req.params.id; const fields = []; const params=[id]; let i=params.length; const set=(c,v)=>{fields.push(`${c}=$${++i}`); params.push(v);}; if (req.body?.name!==undefined) set('name', req.body.name); if (req.body?.description!==undefined) set('description', req.body.description||null); if (req.body?.triggerType!==undefined) set('trigger_type', String(req.body.triggerType).toUpperCase()); if (req.body?.isActive!==undefined) set('is_active', Boolean(req.body.isActive)); if (req.body?.definitionJson!==undefined) set('definition_json', req.body.definitionJson||[]); if (!fields.length) return res.status(400).json({ message: 'keine Änderungen' }); const { rows } = await t.db.query(`UPDATE workflow_definitions SET ${fields.join(', ')}, updated_at = now() WHERE workflow_definition_id = $1 RETURNING *`, params); if (!rows.length) return res.status(404).json({ message: 'Workflow nicht gefunden' }); res.json(rows[0]); } catch (e) { res.status(400).json({ message: 'Workflow konnte nicht aktualisiert werden' }); }
 });
 
 // ====== Patient Timeline ======
 app.get('/api/patients/:id/timeline', authenticateToken, requirePermission('patients.read', 'admin', 'arzt', 'assistenz', 'doctor', 'assistant', 'billing'), async (req, res) => {
   try {
     const t = await ensureRequestTenant(req);
-    const pid = Number(req.params.id);
+    const pid = req.params.id;
     const items = [];
     // Appointments
     try {
-      const { rows } = await t.db.query(`SELECT id, starts_at, reason FROM appointments WHERE tenant_id = $1 AND patient_id = $2 ORDER BY starts_at ASC`, [t.id, pid]);
+      const { rows } = await t.db.query(`SELECT appointment_id AS id, start_at AS starts_at, title AS reason FROM appointments WHERE patient_id = $1 ORDER BY start_at ASC`, [pid]);
       for (const r of rows) items.push({ type: 'APPOINTMENT', date: r.starts_at, text: r.reason || 'Termin', ref: { id: r.id } });
     } catch {}
     // Tasks (mit deutschen Statusbezeichnungen in der Ausgabe)
     try {
-      const { rows } = await t.db.query(`SELECT id, created_at, title, status FROM tasks WHERE tenant_id = $1 AND patient_id = $2 ORDER BY created_at ASC`, [t.id, pid]);
+      const { rows } = await t.db.query(`SELECT task_id AS id, created_at, title, status FROM tasks WHERE patient_id = $1 ORDER BY created_at ASC`, [pid]);
       const label = (s) => {
         switch (String(s).toUpperCase()) {
           case 'OPEN': return 'Offen';
@@ -3313,12 +3281,12 @@ app.get('/api/patients/:id/timeline', authenticateToken, requirePermission('pati
     } catch {}
     // Notes (PATIENT)
     try {
-      const { rows } = await t.db.query(`SELECT id, created_at, title FROM notes WHERE tenant_id = $1 AND patient_id = $2 AND visibility_type = 'PATIENT' ORDER BY created_at ASC`, [t.id, pid]);
+      const { rows } = await t.db.query(`SELECT note_id AS id, created_at, title FROM notes WHERE patient_id = $1 AND visibility_type = 'PATIENT' ORDER BY created_at ASC`, [pid]);
       for (const r of rows) items.push({ type: 'NOTE', date: r.created_at, text: r.title || 'Notiz', ref: { id: r.id } });
     } catch {}
     // Communication
     try {
-      const { rows } = await t.db.query(`SELECT id, created_at, type, direction, summary FROM patient_communication_log WHERE tenant_id = $1 AND patient_id = $2 ORDER BY created_at ASC`, [t.id, pid]);
+      const { rows } = await t.db.query(`SELECT log_id AS id, created_at, type, direction, summary FROM patient_communication_log WHERE patient_id = $1 ORDER BY created_at ASC`, [pid]);
       for (const r of rows) items.push({ type: 'COMM', date: r.created_at, text: `${r.type}/${r.direction}: ${r.summary || ''}`, ref: { id: r.id } });
     } catch {}
     // Waiting room status (nur wenn FERTIG, damit der Ablauf sichtbar wird)
@@ -3326,9 +3294,9 @@ app.get('/api/patients/:id/timeline', authenticateToken, requirePermission('pati
       const { rows } = await t.db.query(
         `SELECT status, last_change_at
            FROM waiting_room_status
-          WHERE tenant_id = $1 AND patient_id = $2
+          WHERE patient_id = $1
           LIMIT 1`,
-        [t.id, pid]
+        [pid]
       );
       if (rows.length && rows[0].status === 'FERTIG') {
         items.push({
@@ -3351,11 +3319,11 @@ app.patch('/api/me/dashboard', authenticateToken, requireRole('admin','arzt','as
     const t = await ensureRequestTenant(req);
     const widgets = Array.isArray(req.body?.widgets) ? req.body.widgets : [];
     await t.db.query(
-      `INSERT INTO user_dashboard_config (tenant_id, user_id, widgets, updated_at)
-       VALUES ($1,$2,$3,now())
-       ON CONFLICT (user_id, tenant_id)
+      `INSERT INTO user_dashboard_config (user_id, widgets, updated_at)
+       VALUES ($1,$2,now())
+       ON CONFLICT (user_id)
        DO UPDATE SET widgets = EXCLUDED.widgets, updated_at = now()`,
-      [t.id, Number(req.user?.id), widgets]
+      [req.user?.id, widgets]
     );
     res.json({ widgets });
   } catch (e) {
@@ -3366,7 +3334,7 @@ app.patch('/api/me/dashboard', authenticateToken, requireRole('admin','arzt','as
 app.get('/api/me/favorites', authenticateToken, requireRole('admin','arzt','assistenz','doctor','assistant','billing'), async (req, res) => {
   try {
     const t = await ensureRequestTenant(req);
-    const { rows } = await t.db.query(`SELECT * FROM favorites WHERE tenant_id = $1 AND user_id = $2 ORDER BY created_at DESC`, [t.id, Number(req.user?.id)]);
+    const { rows } = await t.db.query(`SELECT * FROM favorites WHERE user_id = $1 ORDER BY created_at DESC`, [req.user?.id]);
     res.json({ items: rows });
   } catch (e) {
     res.status(500).json({ message: 'Favoriten konnten nicht geladen werden' });
@@ -3379,8 +3347,8 @@ app.post('/api/me/favorites', authenticateToken, requireRole('admin','arzt','ass
     const { type, targetId } = req.body || {};
     if (!type || !targetId) return res.status(400).json({ message: 'type/targetId fehlt' });
     const { rows } = await t.db.query(
-      `INSERT INTO favorites (tenant_id, user_id, type, target_id) VALUES ($1,$2,$3,$4) RETURNING *`,
-      [t.id, Number(req.user?.id), String(type).toUpperCase(), String(targetId)]
+      `INSERT INTO favorites (user_id, type, target_id) VALUES ($1,$2,$3) RETURNING *`,
+      [req.user?.id, String(type).toUpperCase(), String(targetId)]
     );
     res.status(201).json(rows[0]);
   } catch (e) {
@@ -3391,8 +3359,8 @@ app.post('/api/me/favorites', authenticateToken, requireRole('admin','arzt','ass
 app.delete('/api/me/favorites/:id', authenticateToken, requireRole('admin','arzt','assistenz','doctor','assistant','billing'), async (req, res) => {
   try {
     const t = await ensureRequestTenant(req);
-    const id = Number(req.params.id);
-    const { rowCount } = await t.db.query(`DELETE FROM favorites WHERE tenant_id = $1 AND user_id = $2 AND id = $3`, [t.id, Number(req.user?.id), id]);
+    const id = req.params.id;
+    const { rowCount } = await t.db.query(`DELETE FROM favorites WHERE user_id = $1 AND favorite_id = $2`, [req.user?.id, id]);
     if (!rowCount) return res.status(404).json({ message: 'Nicht gefunden' });
     res.json({ ok: true });
   } catch (e) {
@@ -3403,7 +3371,7 @@ app.delete('/api/me/favorites/:id', authenticateToken, requireRole('admin','arzt
 app.post('/api/patients/:id/communication', authenticateToken, requirePermission('patients.write', 'admin', 'arzt', 'assistenz', 'doctor', 'assistant'), async (req, res) => {
   try {
     const t = await ensureRequestTenant(req);
-    const pid = Number(req.params.id);
+    const pid = req.params.id;
     const { type, direction, summary } = req.body || {};
     const TYPES = new Set(['PHONE','EMAIL','SMS','LETTER','IN_PERSON']);
     const DIRS = new Set(['INBOUND','OUTBOUND']);
@@ -3411,10 +3379,10 @@ app.post('/api/patients/:id/communication', authenticateToken, requirePermission
       return res.status(400).json({ message: 'Ungültiger Typ oder Richtung' });
     }
     const { rows } = await t.db.query(
-      `INSERT INTO patient_communication_log (tenant_id, patient_id, type, direction, summary, created_by_user_id)
-       VALUES ($1,$2,$3,$4,$5,$6)
+      `INSERT INTO patient_communication_log (patient_id, type, direction, summary, created_by)
+       VALUES ($1,$2,$3,$4,$5)
        RETURNING *`,
-      [t.id, pid, String(type).toUpperCase(), String(direction).toUpperCase(), summary || null, Number(req.user?.id) || null]
+      [pid, String(type).toUpperCase(), String(direction).toUpperCase(), summary || null, req.user?.id || null]
     );
     res.status(201).json(rows[0]);
   } catch (e) {
@@ -3425,8 +3393,8 @@ app.post('/api/patients/:id/communication', authenticateToken, requirePermission
 app.get('/api/sops/:id', authenticateToken, requireRole('admin','arzt','assistenz','doctor','assistant'), async (req, res) => {
   try {
     const tenantCtx = await ensureRequestTenant(req);
-    const id = Number(req.params.id);
-    const { rows } = await tenantCtx.db.query(`SELECT * FROM sops WHERE tenant_id = $1 AND id = $2`, [tenantCtx.id, id]);
+    const id = req.params.id;
+    const { rows } = await tenantCtx.db.query(`SELECT * FROM sops WHERE sop_id = $1`, [id]);
     if (!rows.length) return res.status(404).json({ message: 'SOP nicht gefunden' });
     res.json(rows[0]);
   } catch (err) {
@@ -3440,10 +3408,10 @@ app.post('/api/sops', authenticateToken, requireRole('admin','doctor'), async (r
     const { title, content } = req.body || {};
     if (!title) return res.status(400).json({ message: 'title fehlt' });
     const { rows } = await tenantCtx.db.query(
-      `INSERT INTO sops (tenant_id, title, content, created_by_user_id)
-       VALUES ($1,$2,$3,$4)
+      `INSERT INTO sops (title, content, created_by)
+       VALUES ($1,$2,$3)
        RETURNING *`,
-      [tenantCtx.id, String(title), content || null, Number(req.user?.id) || null]
+      [String(title), content || null, req.user?.id || null]
     );
     res.status(201).json(rows[0]);
   } catch (err) {
@@ -3454,13 +3422,13 @@ app.post('/api/sops', authenticateToken, requireRole('admin','doctor'), async (r
 app.patch('/api/sops/:id', authenticateToken, requireRole('admin','doctor'), async (req, res) => {
   try {
     const tenantCtx = await ensureRequestTenant(req);
-    const id = Number(req.params.id);
-    const existing = await tenantCtx.db.query(`SELECT * FROM sops WHERE tenant_id = $1 AND id = $2`, [tenantCtx.id, id]);
+    const id = req.params.id;
+    const existing = await tenantCtx.db.query(`SELECT * FROM sops WHERE sop_id = $1`, [id]);
     if (!existing.rowCount) return res.status(404).json({ message: 'SOP nicht gefunden' });
     const prev = existing.rows[0];
     if (prev.locked) return res.status(403).json({ message: 'SOP ist gesperrt' });
     const fields = [];
-    const params = [tenantCtx.id, id];
+    const params = [id];
     let i = params.length;
     const set = (col, val) => { fields.push(`${col} = $${++i}`); params.push(val); };
     if (req.body?.title !== undefined) set('title', String(req.body.title));
@@ -3471,7 +3439,7 @@ app.patch('/api/sops/:id', authenticateToken, requireRole('admin','doctor'), asy
     }
     if (!fields.length) return res.status(400).json({ message: 'keine Änderungen' });
     const { rows } = await tenantCtx.db.query(
-      `UPDATE sops SET ${fields.join(', ')}, updated_at = now() WHERE tenant_id = $1 AND id = $2 RETURNING *`,
+      `UPDATE sops SET ${fields.join(', ')}, updated_at = now() WHERE sop_id = $1 RETURNING *`,
       params
     );
     res.json(rows[0]);
@@ -3483,10 +3451,10 @@ app.patch('/api/sops/:id', authenticateToken, requireRole('admin','doctor'), asy
 app.post('/api/sops/:id/lock', authenticateToken, requireRole('admin','doctor'), async (req, res) => {
   try {
     const tenantCtx = await ensureRequestTenant(req);
-    const id = Number(req.params.id);
+    const id = req.params.id;
     const { rows } = await tenantCtx.db.query(
-      `UPDATE sops SET locked = true, updated_at = now() WHERE tenant_id = $1 AND id = $2 AND locked = false RETURNING *`,
-      [tenantCtx.id, id]
+      `UPDATE sops SET locked = true, updated_at = now() WHERE sop_id = $1 AND locked = false RETURNING *`,
+      [id]
     );
     if (!rows.length) return res.status(404).json({ message: 'SOP nicht gefunden oder bereits gesperrt' });
     res.json(rows[0]);
@@ -3505,22 +3473,19 @@ async function resolveDoctorId(tenantCtx, identifier, fallbackUser) {
   const normalized = String(identifier).trim().toLowerCase();
   if (!normalized) return null;
   const { rows } = await db.query(
-    `SELECT id
+    `SELECT user_id
        FROM users
-      WHERE tenant_id = $1
-        AND (lower(email) = $2 OR lower(username) = $2)
+      WHERE lower(email) = $1 AND deleted_at IS NULL
       LIMIT 1`,
-    [tenantCtx.id, normalized]
+    [normalized]
   );
-  if (rows.length) return rows[0].id;
-  const asNumber = Number(identifier);
-  if (Number.isFinite(asNumber)) {
-    const resultById = await db.query(
-      `SELECT id FROM users WHERE tenant_id = $1 AND id = $2 LIMIT 1`,
-      [tenantCtx.id, asNumber]
-    );
-    if (resultById.rows.length) return resultById.rows[0].id;
-  }
+  if (rows.length) return rows[0].user_id;
+  // Try direct UUID lookup
+  const resultById = await db.query(
+    `SELECT user_id FROM users WHERE user_id = $1 AND deleted_at IS NULL LIMIT 1`,
+    [identifier]
+  );
+  if (resultById.rows.length) return resultById.rows[0].user_id;
   return null;
 }
 
@@ -3603,143 +3568,78 @@ async function createPatientHandler(req, res) {
     return res.status(400).json({ message: 'Bei Geschlecht "Divers" ist das behandelte Geschlecht (treated_sex/sex: male|female) für die Abrechnung erforderlich.' });
   }
 
-  let doctorId = Number(body.doctor_id || body.doctorId);
-  if (!Number.isFinite(doctorId)) {
+  let doctorId = body.doctor_id || body.doctorId || null;
+  if (!doctorId) {
     doctorId = await resolveDoctorId(tenantCtx, doctorIdentifier, req.user);
   }
 
-  let insuranceId = body.insurance_id ? Number(body.insurance_id) : null;
-  if (!Number.isFinite(insuranceId) && insurance) {
+  let insuranceId = body.insurance_id ? String(body.insurance_id) : null;
+  if (!insuranceId && insurance) {
     try {
       const { rows: ins } = await db.query(
-        `SELECT id FROM insurances WHERE tenant_id = $1 AND lower(name) = lower($2) LIMIT 1`,
-        [tenantCtx.id, String(insurance).trim()]
+        `SELECT insurance_id AS id FROM insurances WHERE lower(name) = lower($1) LIMIT 1`,
+        [String(insurance).trim()]
       );
       if (ins.length) insuranceId = ins[0].id;
     } catch {}
   }
-  const params = [
-    tenantCtx.id,
-    fullName,
-    birthdate,
-    genderInfo?.iso || null,
-    insurance,
-    insuranceNumber,
-    doctorId,
-    phone,
-    email,
-    JSON.stringify(address),
-    notes,
-    medikationsplan,
-    allergien,
-    impfstatus,
-    ahvNummer,
-    firstName || fullName,
-    lastName || '',
-    birthdate,
-    genderInfo?.legacy || null,
-    address.street || null,
-    address.houseNo || null,
-    address.zip || null,
-    address.city || null,
-    phone,
-    insuranceNumber,
-    insurance,
-    kassenAdresse,
-    notes,
-    insuranceId,
-    guardianDb.firstName,
-    guardianDb.lastName,
-    guardianDb.relationship,
-    guardianDb.phone,
-    guardianDb.email,
-    guardianDb.addressJson,
-    guardianDb.sameAddress,
-    guardianDb.street,
-    guardianDb.houseNo,
-    guardianDb.zip,
-    guardianDb.city,
-    treatedSex,
-    vorgesetzter
-  ];
-
   try {
     const result = await db.query(
        `INSERT INTO patients (
-         tenant_id, name, birthdate, gender, insurance, insurance_number,
-         doctor_id, phone, email, address, notes,
-         medikationsplan, allergien, impfstatus,
-         ahv_nummer,
-         vorname, nachname, geburtsdatum, geschlecht,
-         adresse, hausnummer, plz, ort, telefonnummer,
-         versichertennummer, krankenkasse, krankenkasse_adresse, krankengeschichte,
+         first_name, last_name, birth_date, sex,
+         phone, email, street, house_number, postal_code, city,
+         notes, medication_plan, allergies, vaccination_status,
+         ahv_number, insurance_number,
          insurance_id,
          guardian_first_name, guardian_last_name, guardian_relationship, guardian_phone, guardian_email,
-         guardian_address, guardian_same_address, guardian_adresse, guardian_hausnummer, guardian_plz, guardian_ort,
-         treated_sex,
-         vorgesetzter
+         guardian_same_address, guardian_street, guardian_house_number, guardian_postal_code, guardian_city,
+         treated_sex
        ) VALUES (
-         $1,$2,$3,$4,$5,$6,
-         $7,$8,$9,$10::jsonb,$11,
-         $12,$13,$14,
-         $15,
-         $16,$17,$18,$19,
-         $20,$21,$22,$23,$24,
-         $25,$26,$27,$28,
-         $29,
-         $30,$31,$32,$33,$34,
-         $35::jsonb,$36,$37,$38,$39,$40,
-         $41,
-         $42
+         $1,$2,$3,$4,
+         $5,$6,$7,$8,$9,$10,
+         $11,$12,$13,$14,
+         $15,$16,
+         $17,
+         $18,$19,$20,$21,$22,
+         $23,$24,$25,$26,$27,
+         $28
        )
-       ON CONFLICT (tenant_id, insurance_number)
-       DO UPDATE SET
-         name = EXCLUDED.name,
-         birthdate = EXCLUDED.birthdate,
-         gender = EXCLUDED.gender,
-         insurance = EXCLUDED.insurance,
-         doctor_id = COALESCE(EXCLUDED.doctor_id, patients.doctor_id),
-         phone = EXCLUDED.phone,
-         email = EXCLUDED.email,
-         address = EXCLUDED.address,
-         notes = EXCLUDED.notes,
-         medikationsplan = COALESCE(EXCLUDED.medikationsplan, patients.medikationsplan),
-         allergien = COALESCE(EXCLUDED.allergien, patients.allergien),
-         impfstatus = COALESCE(EXCLUDED.impfstatus, patients.impfstatus),
-         ahv_nummer = COALESCE(EXCLUDED.ahv_nummer, patients.ahv_nummer),
-         treated_sex = COALESCE(EXCLUDED.treated_sex, patients.treated_sex),
-         vorgesetzter = COALESCE(EXCLUDED.vorgesetzter, patients.vorgesetzter),
-         vorname = EXCLUDED.vorname,
-         nachname = EXCLUDED.nachname,
-         geburtsdatum = EXCLUDED.geburtsdatum,
-         geschlecht = EXCLUDED.geschlecht,
-         adresse = EXCLUDED.adresse,
-         hausnummer = EXCLUDED.hausnummer,
-         plz = EXCLUDED.plz,
-         ort = EXCLUDED.ort,
-         telefonnummer = EXCLUDED.telefonnummer,
-         versichertennummer = EXCLUDED.versichertennummer,
-         krankenkasse = EXCLUDED.krankenkasse,
-         krankenkasse_adresse = EXCLUDED.krankenkasse_adresse,
-         krankengeschichte = EXCLUDED.krankengeschichte,
-         insurance_id = COALESCE(EXCLUDED.insurance_id, patients.insurance_id),
-         guardian_first_name = EXCLUDED.guardian_first_name,
-         guardian_last_name = EXCLUDED.guardian_last_name,
-         guardian_relationship = EXCLUDED.guardian_relationship,
-         guardian_phone = EXCLUDED.guardian_phone,
-         guardian_email = EXCLUDED.guardian_email,
-         guardian_address = EXCLUDED.guardian_address,
-         guardian_same_address = EXCLUDED.guardian_same_address,
-         guardian_adresse = EXCLUDED.guardian_adresse,
-         guardian_hausnummer = EXCLUDED.guardian_hausnummer,
-         guardian_plz = EXCLUDED.guardian_plz,
-         guardian_ort = EXCLUDED.guardian_ort
+       ON CONFLICT (patient_id) DO NOTHING
        RETURNING *`,
-      params
+      [
+        firstName || fullName,
+        lastName || '',
+        birthdate,
+        genderInfo?.iso || null,
+        phone,
+        email,
+        address.street || null,
+        address.houseNo || null,
+        address.zip || null,
+        address.city || null,
+        notes,
+        medikationsplan,
+        allergien,
+        impfstatus,
+        ahvNummer,
+        insuranceNumber,
+        insuranceId,
+        guardianDb.firstName,
+        guardianDb.lastName,
+        guardianDb.relationship,
+        guardianDb.phone,
+        guardianDb.email,
+        guardianDb.sameAddress,
+        guardianDb.street,
+        guardianDb.houseNo,
+        guardianDb.zip,
+        guardianDb.city,
+        treatedSex
+      ]
     );
     const patient = result.rows[0];
-    await provisionPatientStorage(tenantCtx, patient.id);
-    await audit(req, 'patient.create', { userId: req.user?.id, patientId: patient.id, ...clientMeta(req) });
+    await provisionPatientStorage(tenantCtx, patient.patient_id);
+    await audit(req, 'patient.create', { userId: req.user?.id, patientId: patient.patient_id, ...clientMeta(req) });
     res.status(201).json({ patient: toPatientDto(patient) });
   } catch (err) {
     console.error('Patient creation failed:', err);
@@ -3751,22 +3651,21 @@ async function listPatientsHandler(req, res) {
   try {
     const { rows } = await req.tenant.db.query(
       `SELECT p.*,
-              u.name AS doctor_name,
+              u.display_name AS doctor_name,
               u.email AS doctor_email,
               i.name AS insurance_name,
               i.ean AS insurance_ean,
               i.kvnr AS insurance_kvnr,
               i.address AS insurance_address,
-              i.zip AS insurance_zip,
+              i.postal_code AS insurance_zip,
               i.city AS insurance_city,
               i.canton AS insurance_canton,
               i.bfs_code AS insurance_bfs_code
          FROM patients p
-         LEFT JOIN users u ON u.id = p.doctor_id
-         LEFT JOIN insurances i ON i.id = p.insurance_id AND i.tenant_id = p.tenant_id
-        WHERE p.tenant_id = $1
-        ORDER BY COALESCE(p.name, concat_ws(' ', p.vorname, p.nachname)) ASC`,
-      [req.tenant.id]
+         LEFT JOIN users u ON u.user_id = p.created_by
+         LEFT JOIN insurances i ON i.insurance_id = p.insurance_id
+        WHERE p.deleted_at IS NULL
+        ORDER BY COALESCE(p.first_name || ' ' || p.last_name, p.first_name, p.last_name) ASC`
     );
     res.json(rows.map(toPatientDto));
   } catch (err) {
@@ -3782,21 +3681,19 @@ async function searchPatientsHandler(req, res) {
   try {
     const { rows } = await req.tenant.db.query(
       `SELECT p.*,
-              u.name AS doctor_name,
+              u.display_name AS doctor_name,
               u.email AS doctor_email
          FROM patients p
-         LEFT JOIN users u ON u.id = p.doctor_id
-        WHERE p.tenant_id = $1
+         LEFT JOIN users u ON u.user_id = p.created_by
+        WHERE p.deleted_at IS NULL
           AND (
-            COALESCE(p.name, '') ILIKE $2 OR
-            COALESCE(p.vorname, '') ILIKE $2 OR
-            COALESCE(p.nachname, '') ILIKE $2 OR
-            COALESCE(p.versichertennummer, '') ILIKE $2 OR
-            COALESCE(p.insurance_number, '') ILIKE $2
+            COALESCE(p.first_name, '') ILIKE $1 OR
+            COALESCE(p.last_name, '') ILIKE $1 OR
+            COALESCE(p.insurance_number, '') ILIKE $1
           )
-        ORDER BY COALESCE(p.name, concat_ws(' ', p.vorname, p.nachname)) ASC
+        ORDER BY COALESCE(p.first_name || ' ' || p.last_name, p.first_name, p.last_name) ASC
         LIMIT 50`,
-      [req.tenant.id, like]
+      [like]
     );
     res.json(rows.map(toPatientDto));
   } catch (err) {
@@ -3816,22 +3713,22 @@ app.get('/api/patients/:id', maybeAuth, requirePermission('patients.read', 'admi
   try {
     const { rows } = await req.tenant.db.query(
       `SELECT p.*,
-              u.name AS doctor_name,
+              u.display_name AS doctor_name,
               u.email AS doctor_email,
               i.name AS insurance_name,
               i.ean AS insurance_ean,
               i.kvnr AS insurance_kvnr,
               i.address AS insurance_address,
-              i.zip AS insurance_zip,
+              i.postal_code AS insurance_zip,
               i.city AS insurance_city,
               i.canton AS insurance_canton,
               i.bfs_code AS insurance_bfs_code
          FROM patients p
-         LEFT JOIN users u ON u.id = p.doctor_id
-         LEFT JOIN insurances i ON i.id = p.insurance_id AND i.tenant_id = p.tenant_id
-        WHERE p.tenant_id = $1 AND p.id = $2
+         LEFT JOIN users u ON u.user_id = p.created_by
+         LEFT JOIN insurances i ON i.insurance_id = p.insurance_id
+        WHERE p.patient_id = $1 AND p.deleted_at IS NULL
         LIMIT 1`,
-      [req.tenant.id, Number(req.params.id)]
+      [req.params.id]
     );
     if (!rows.length) return res.status(404).json({ message: 'Patient nicht gefunden' });
     res.json(toPatientDto(rows[0]));
@@ -3841,15 +3738,234 @@ app.get('/api/patients/:id', maybeAuth, requirePermission('patients.read', 'admi
   }
 });
 
+// ====== DSGVO Art. 20 – Datenportabilität: vollständiger Patientenexport ======
+app.get('/api/patients/:id/export', authenticateToken, requirePermission('patients.read', 'admin', 'arzt', 'assistenz', 'doctor', 'assistant'), async (req, res) => {
+  try {
+    const t = await ensureRequestTenant(req);
+    const pid = req.params.id;
+
+    // 1. Patient record (must exist and not be deleted)
+    const patientRes = await t.db.query(
+      `SELECT p.*,
+              i.name AS insurance_name,
+              i.ean AS insurance_ean,
+              i.kvnr AS insurance_kvnr,
+              i.address AS insurance_address,
+              i.postal_code AS insurance_zip,
+              i.city AS insurance_city,
+              i.canton AS insurance_canton,
+              i.bfs_code AS insurance_bfs_code
+         FROM patients p
+         LEFT JOIN insurances i ON i.insurance_id = p.insurance_id
+        WHERE p.patient_id = $1 AND p.deleted_at IS NULL
+        LIMIT 1`,
+      [pid]
+    );
+    if (!patientRes.rows.length) return res.status(404).json({ message: 'Patient nicht gefunden' });
+    const patient = toPatientDto(patientRes.rows[0]);
+
+    // Helper: run query, return rows; on error (e.g. table not yet in schema) return []
+    const safeQuery = async (sql, params) => {
+      try {
+        const { rows } = await t.db.query(sql, params);
+        return rows;
+      } catch (e) {
+        console.warn(`patient export query failed (patient_id=${pid}):`, e?.message);
+        return [];
+      }
+    };
+
+    // 2. Appointments
+    const appointments = await safeQuery(
+      `SELECT appointment_id, calendar_id, patient_id, created_by,
+              title, start_at, end_at, room_id, status,
+              medidata_ref, created_at, updated_at
+         FROM appointments
+        WHERE patient_id = $1 AND deleted_at IS NULL
+        ORDER BY start_at DESC`,
+      [pid]
+    );
+
+    // 3. Notes (all visibility types – the patient owns their own data)
+    const notes = await safeQuery(
+      `SELECT note_id, owner_user_id, patient_id,
+              visibility_type, title, content, tags,
+              color, pinned, locked, created_at, updated_at
+         FROM notes
+        WHERE patient_id = $1 AND deleted_at IS NULL
+        ORDER BY created_at DESC`,
+      [pid]
+    );
+
+    // 4. Letters
+    const letters = await safeQuery(
+      `SELECT letter_id, patient_id, type, title, status,
+              content, created_by, created_at, updated_at
+         FROM letters
+        WHERE patient_id = $1 AND deleted_at IS NULL
+        ORDER BY created_at DESC`,
+      [pid]
+    );
+
+    // 5. Sick notes
+    const sick_notes = await safeQuery(
+      `SELECT sick_note_id, patient_id, start_date, end_date,
+              open_end, degree_percent, diagnosis_short, remark,
+              receiver_type, receiver_name, receiver_address,
+              status, created_by, created_at, updated_at
+         FROM sick_notes
+        WHERE patient_id = $1 AND deleted_at IS NULL
+        ORDER BY start_date DESC`,
+      [pid]
+    );
+
+    // 6. Tasks
+    const tasks = await safeQuery(
+      `SELECT task_id, title, description, created_by,
+              assigned_to, patient_id, related_appointment_id,
+              priority, type, tags, due_date, status,
+              created_at, updated_at
+         FROM tasks
+        WHERE patient_id = $1 AND deleted_at IS NULL
+        ORDER BY created_at DESC`,
+      [pid]
+    );
+
+    // 7. Invoices
+    const invoices = await safeQuery(
+      `SELECT invoice_id, patient_id, created_by,
+              amount, currency, status, medidata_ref,
+              due_date, sent_at, paid_at, created_at, updated_at
+         FROM invoices
+        WHERE patient_id = $1 AND deleted_at IS NULL
+        ORDER BY created_at DESC`,
+      [pid]
+    );
+
+    // 8. Prescriptions with linked medication details
+    const prescriptions = await safeQuery(
+      `SELECT pr.prescription_id, pr.patient_id, pr.medication_id,
+              pr.prescribed_by, pr.dosage, pr.frequency,
+              pr.start_date, pr.end_date, pr.notes, pr.status,
+              pr.created_at, pr.updated_at,
+              m.name             AS medication_name,
+              m.atc_code         AS medication_atc_code,
+              m.manufacturer     AS medication_manufacturer,
+              m.active_substances AS medication_active_substances,
+              m.forms            AS medication_forms,
+              m.indications      AS medication_indications
+         FROM prescriptions pr
+         LEFT JOIN medications m ON m.medication_id = pr.medication_id
+        WHERE pr.patient_id = $1 AND pr.deleted_at IS NULL
+        ORDER BY pr.created_at DESC`,
+      [pid]
+    );
+
+    // 9. Patient journey
+    const journey = await safeQuery(
+      `SELECT journey_id, patient_id, stage,
+              updated_by, created_at, updated_at
+         FROM patient_journey
+        WHERE patient_id = $1
+        ORDER BY updated_at DESC`,
+      [pid]
+    );
+
+    // 10. Documents metadata (no file contents – only metadata per DSGVO Art. 20)
+    const documents = await safeQuery(
+      `SELECT document_id, patient_id, file_path, type,
+              uploaded_by, size_bytes, metadata, created_at
+         FROM documents
+        WHERE patient_id = $1
+        ORDER BY created_at DESC`,
+      [pid]
+    );
+
+    // 11. Patient media metadata
+    const patient_media = await safeQuery(
+      `SELECT media_id, patient_id, file_path, type,
+              description, created_by, created_at
+         FROM patient_media
+        WHERE patient_id = $1
+        ORDER BY created_at DESC`,
+      [pid]
+    );
+
+    // 12. Communication log
+    const communication_log = await safeQuery(
+      `SELECT log_id, patient_id, type, direction,
+              summary, created_by, created_at
+         FROM patient_communication_log
+        WHERE patient_id = $1
+        ORDER BY created_at DESC`,
+      [pid]
+    );
+
+    // Assemble the export payload
+    const exportedAt = new Date().toISOString();
+    const exportPayload = {
+      export_meta: {
+        exported_at: exportedAt,
+        exported_by: req.user?.id || null,
+        patient_id: pid,
+        legal_basis: 'DSGVO Art. 20 – Recht auf Datenübertragbarkeit',
+      },
+      patient,
+      appointments,
+      notes,
+      letters,
+      sick_notes,
+      tasks,
+      invoices,
+      prescriptions,
+      journey,
+      documents,
+      patient_media,
+      communication_log,
+    };
+
+    // Log the export in audit_log (non-fatal – must never block the response)
+    try {
+      const meta = clientMeta(req);
+      await t.db.query(
+        `INSERT INTO audit_log
+           (user_id, action, resource, resource_id, ip_address, user_agent, metadata)
+         VALUES ($1, $2, $3, $4, $5::inet, $6, $7)`,
+        [
+          req.user?.id || null,
+          'patient.data_export',
+          'patients',
+          pid,
+          meta.ip || null,
+          meta.ua || null,
+          JSON.stringify({ legal_basis: 'DSGVO Art. 20', exported_at: exportedAt }),
+        ]
+      );
+    } catch (auditErr) {
+      // audit_log write failure must never block the export response; fall back to tenant log
+      console.warn('patient.data_export: audit_log insert failed:', auditErr?.message);
+      await audit(req, 'patient.data_export', { userId: req.user?.id, patientId: pid, ...clientMeta(req) }).catch(() => {});
+    }
+
+    const filename = `patient-export-${pid}-${exportedAt.replace(/[:.]/g, '-')}.json`;
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.json(exportPayload);
+  } catch (err) {
+    console.error('GET /api/patients/:id/export failed:', err);
+    res.status(500).json({ message: safeClientError('Datenexport fehlgeschlagen', err) });
+  }
+});
+
 // Update patient (limited fields)
 app.put('/api/patients/:id', maybeAuth, requirePermission('patients.write', 'admin', 'doctor', 'assistant'), async (req, res) => {
   try {
-    const id = Number(req.params.id);
-    if (!Number.isFinite(id)) return res.status(400).json({ message: 'Ungültige Patienten-ID' });
+    const id = req.params.id;
+    if (!id) return res.status(400).json({ message: 'Ungültige Patienten-ID' });
     const body = req.body || {};
     const existingRes = await req.tenant.db.query(
-      `SELECT * FROM patients WHERE tenant_id = $1 AND id = $2 LIMIT 1`,
-      [req.tenant.id, id]
+      `SELECT * FROM patients WHERE patient_id = $1 AND deleted_at IS NULL LIMIT 1`,
+      [id]
     );
     if (!existingRes.rows.length) return res.status(404).json({ message: 'Patient nicht gefunden' });
     const existing = existingRes.rows[0];
@@ -3857,60 +3973,55 @@ app.put('/api/patients/:id', maybeAuth, requirePermission('patients.write', 'adm
     const currentGuardian = parseGuardianFromRow(existing);
 
     const fields = {
-      vorname: body.vorname,
-      nachname: body.nachname,
-      birthdate: body.birthdate,
-      geburtsdatum: body.geburtsdatum,
-      telefonnummer: body.telefonnummer || body.phone,
-      phone: body.phone || body.telefonnummer,
+      first_name: body.vorname || body.first_name || body.firstName,
+      last_name: body.nachname || body.last_name || body.lastName,
+      birth_date: body.geburtsdatum || body.birthdate || body.birth_date,
+      phone: body.telefonnummer || body.phone,
       email: body.email,
-      adresse: body.adresse || (body.address && body.address.street),
-      hausnummer: body.hausnummer || (body.address && body.address.houseNo),
-      plz: body.plz || (body.address && body.address.zip),
-      ort: body.ort || (body.address && body.address.city),
-      krankengeschichte: body.krankengeschichte || body.notes,
+      street: body.adresse || body.street || (body.address && body.address.street),
+      house_number: body.hausnummer || body.house_number || (body.address && body.address.houseNo),
+      postal_code: body.plz || body.postal_code || (body.address && body.address.zip),
+      city: body.ort || body.city || (body.address && body.address.city),
+      medical_history: body.krankengeschichte || body.notes || body.medical_history,
       notes: body.notes || body.krankengeschichte,
-      medikationsplan: body.medikationsplan,
-      allergien: body.allergien,
-      impfstatus: body.impfstatus,
-      krankenkasse: body.krankenkasse || body.insurance || body.krankenkasse_name,
-      krankenkasse_adresse: body.krankenkasse_adresse || body.insurance_address,
-      versichertennummer: body.versichertennummer || body.insurance_number,
-      ahv_nummer: body.ahv_nummer || body.ahv,
-      insurance: body.insurance || body.krankenkasse || body.krankenkasse_name,
-      insurance_number: body.insurance_number || body.versichertennummer
+      medication_plan: body.medikationsplan || body.medication_plan,
+      allergies: body.allergien || body.allergies,
+      vaccination_status: body.impfstatus || body.vaccination_status,
+      insurance_number: body.versichertennummer || body.insurance_number,
+      ahv_number: body.ahv_nummer || body.ahv || body.ahv_number,
+      insurance: body.insurance || body.krankenkasse || body.krankenkasse_name
     };
 
     const birthdatePatchProvided =
       Object.prototype.hasOwnProperty.call(body, 'birthdate') ||
+      Object.prototype.hasOwnProperty.call(body, 'birth_date') ||
       Object.prototype.hasOwnProperty.call(body, 'geburtsdatum');
     if (birthdatePatchProvided) {
-      const nextBirthdate = body.birthdate || body.geburtsdatum || null;
-      fields.birthdate = nextBirthdate;
-      fields.geburtsdatum = nextBirthdate;
+      const nextBirthdate = body.birth_date || body.birthdate || body.geburtsdatum || null;
+      fields.birth_date = nextBirthdate;
     }
 
     const genderPatchProvided =
       Object.prototype.hasOwnProperty.call(body, 'geschlecht') ||
-      Object.prototype.hasOwnProperty.call(body, 'gender');
+      Object.prototype.hasOwnProperty.call(body, 'gender') ||
+      Object.prototype.hasOwnProperty.call(body, 'sex');
     if (genderPatchProvided) {
-      const g = normalizeGender(body.geschlecht || body.gender);
+      const g = normalizeGender(body.sex || body.geschlecht || body.gender);
       if (!g) return res.status(400).json({ message: 'Ungültiges Geschlecht.' });
-      fields.gender = g.iso;
-      fields.geschlecht = g.legacy;
+      fields.sex = g.iso;
     }
 
     const namePatchProvided =
       Object.prototype.hasOwnProperty.call(body, 'name') ||
       Object.prototype.hasOwnProperty.call(body, 'vorname') ||
-      Object.prototype.hasOwnProperty.call(body, 'nachname');
+      Object.prototype.hasOwnProperty.call(body, 'first_name') ||
+      Object.prototype.hasOwnProperty.call(body, 'nachname') ||
+      Object.prototype.hasOwnProperty.call(body, 'last_name');
     if (namePatchProvided) {
-      const nextFirst = typeof body.vorname !== 'undefined' ? body.vorname : existing.vorname;
-      const nextLast = typeof body.nachname !== 'undefined' ? body.nachname : existing.nachname;
-      const explicit = typeof body.name !== 'undefined' ? String(body.name || '').trim() : '';
-      const derived = [nextFirst, nextLast].filter(Boolean).join(' ').trim();
-      const nextName = explicit || derived;
-      if (nextName) fields.name = nextName;
+      const nextFirst = body.first_name || body.vorname || existing.first_name;
+      const nextLast = body.last_name || body.nachname || existing.last_name;
+      fields.first_name = nextFirst || null;
+      fields.last_name = nextLast || null;
     }
 
     const treatedSexPatchProvided =
@@ -3935,27 +4046,27 @@ app.put('/api/patients/:id', maybeAuth, requirePermission('patients.write', 'adm
       Object.prototype.hasOwnProperty.call(body, 'supervisor') ||
       Object.prototype.hasOwnProperty.call(body, 'vorgesetzte');
     if (vorgesetzterPatchProvided) {
-      fields.vorgesetzter = cleanString(body.vorgesetzter ?? body.supervisor ?? body.vorgesetzte);
+      // vorgesetzter column not in V5 schema - skip silently
     }
 
     const addressPatchProvided =
       Object.prototype.hasOwnProperty.call(body, 'adresse') ||
+      Object.prototype.hasOwnProperty.call(body, 'street') ||
       Object.prototype.hasOwnProperty.call(body, 'hausnummer') ||
+      Object.prototype.hasOwnProperty.call(body, 'house_number') ||
       Object.prototype.hasOwnProperty.call(body, 'plz') ||
+      Object.prototype.hasOwnProperty.call(body, 'postal_code') ||
       Object.prototype.hasOwnProperty.call(body, 'ort') ||
+      Object.prototype.hasOwnProperty.call(body, 'city') ||
       (body.address && typeof body.address === 'object');
     if (addressPatchProvided) {
-      const nextAddress = {
-        street: typeof fields.adresse !== 'undefined' ? fields.adresse : (currentAddress.street || null),
-        houseNo: typeof fields.hausnummer !== 'undefined' ? fields.hausnummer : (currentAddress.houseNo || null),
-        zip: typeof fields.plz !== 'undefined' ? fields.plz : (currentAddress.zip || null),
-        city: typeof fields.ort !== 'undefined' ? fields.ort : (currentAddress.city || null),
-        country: currentAddress.country || 'CH'
-      };
-      fields.address = JSON.stringify(nextAddress);
+      if (typeof fields.street !== 'undefined') fields.street = fields.street || null;
+      if (typeof fields.house_number !== 'undefined') fields.house_number = fields.house_number || null;
+      if (typeof fields.postal_code !== 'undefined') fields.postal_code = fields.postal_code || null;
+      if (typeof fields.city !== 'undefined') fields.city = fields.city || null;
     }
 
-    const nextGenderIso = (genderPatchProvided ? fields.gender : normalizeGender(existing.gender || existing.geschlecht)?.iso) || null;
+    const nextGenderIso = (genderPatchProvided ? fields.sex : normalizeGender(existing.sex || existing.geschlecht || existing.gender)?.iso) || null;
     const nextTreatedSex = (treatedSexPatchProvided ? fields.treated_sex : (existing.treated_sex || null)) || null;
     if (nextGenderIso && ['diverse', 'other'].includes(String(nextGenderIso).toLowerCase()) && !nextTreatedSex) {
       return res.status(400).json({ message: 'Bei Geschlecht "Divers" ist treated_sex/sex (male|female) erforderlich.' });
@@ -3968,11 +4079,11 @@ app.put('/api/patients/:id', maybeAuth, requirePermission('patients.write', 'adm
     } else if (typeof insuranceId !== 'undefined') {
       const n = Number(insuranceId);
       if (Number.isFinite(n)) fields.insurance_id = n;
-    } else if ((fields.krankenkasse || '').trim()) {
+    } else if ((fields.insurance_name || '').trim()) {
       try {
         const { rows: ins } = await req.tenant.db.query(
-          `SELECT id FROM insurances WHERE tenant_id = $1 AND lower(name) = lower($2) LIMIT 1`,
-          [req.tenant.id, String(fields.krankenkasse).trim()]
+          `SELECT insurance_id AS id FROM insurances WHERE lower(name) = lower($1) LIMIT 1`,
+          [String(fields.insurance_name || fields.krankenkasse || '').trim()]
         );
         if (ins.length) fields.insurance_id = ins[0].id;
       } catch {}
@@ -3982,10 +4093,10 @@ app.put('/api/patients/:id', maybeAuth, requirePermission('patients.write', 'adm
     let guardianInput = null;
     if (guardianPatchProvided) {
       const nextAddress = {
-        street: typeof fields.adresse !== 'undefined' ? fields.adresse : (currentAddress.street || null),
-        houseNo: typeof fields.hausnummer !== 'undefined' ? fields.hausnummer : (currentAddress.houseNo || null),
-        zip: typeof fields.plz !== 'undefined' ? fields.plz : (currentAddress.zip || null),
-        city: typeof fields.ort !== 'undefined' ? fields.ort : (currentAddress.city || null),
+        street: fields.street !== undefined ? fields.street : (currentAddress.street || null),
+        houseNo: fields.house_number !== undefined ? fields.house_number : (currentAddress.houseNo || null),
+        zip: fields.postal_code !== undefined ? fields.postal_code : (currentAddress.zip || null),
+        city: fields.city !== undefined ? fields.city : (currentAddress.city || null),
         country: currentAddress.country || 'CH'
       };
       guardianInput = normalizeGuardianInput(body, nextAddress);
@@ -4003,16 +4114,16 @@ app.put('/api/patients/:id', maybeAuth, requirePermission('patients.write', 'adm
       fields.guardian_email = guardianInput.email || null;
       fields.guardian_address = guardianAddress ? JSON.stringify(guardianAddress) : null;
       fields.guardian_same_address = guardianInput.sameAddress && guardianAddress ? true : false;
-      fields.guardian_adresse = guardianAddress?.street || null;
-      fields.guardian_hausnummer = guardianAddress?.houseNo || null;
-      fields.guardian_plz = guardianAddress?.zip || null;
-      fields.guardian_ort = guardianAddress?.city || null;
+      fields.guardian_street = guardianAddress?.street || null;
+      fields.guardian_house_number = guardianAddress?.houseNo || null;
+      fields.guardian_postal_code = guardianAddress?.zip || null;
+      fields.guardian_city = guardianAddress?.city || null;
     }
 
     const keys = Object.keys(fields).filter((k) => typeof fields[k] !== 'undefined');
     if (!keys.length) return res.status(400).json({ message: 'Keine Felder zum Aktualisieren übergeben' });
 
-    const nextBirthdate = (birthdatePatchProvided ? (fields.birthdate || fields.geburtsdatum) : null) || existing.geburtsdatum || existing.birthdate || null;
+    const nextBirthdate = (birthdatePatchProvided ? fields.birth_date : null) || existing.birth_date || existing.birthdate || existing.geburtsdatum || null;
     const minorAfterUpdate = isMinorPatient(nextBirthdate);
     const guardianForValidation = guardianPatchProvided
       ? (guardianInput?.provided ? guardianInput : null)
@@ -4037,14 +4148,14 @@ app.put('/api/patients/:id', maybeAuth, requirePermission('patients.write', 'adm
       }
     }
 
-    const sets = keys.map((k, i) => {
-      const placeholder = `$${i + 3}`;
+    const sets2 = keys.map((k, i) => {
+      const placeholder = `$${i + 2}`;
       if (k === 'guardian_address') return `${k} = ${placeholder}::jsonb`;
       if (k === 'address') return `${k} = ${placeholder}::jsonb`;
       return `${k} = ${placeholder}`;
     });
-    const params = [req.tenant.id, id, ...keys.map((k) => fields[k])];
-    const sql = `UPDATE patients SET ${sets.join(', ')}, updated_at = now() WHERE tenant_id = $1 AND id = $2 RETURNING *`;
+    const params = [id, ...keys.map((k) => fields[k])];
+    const sql = `UPDATE patients SET ${sets2.join(', ')}, updated_at = now() WHERE patient_id = $1 AND deleted_at IS NULL RETURNING *`;
     const { rows } = await req.tenant.db.query(sql, params);
     if (!rows.length) return res.status(404).json({ message: 'Patient nicht gefunden' });
     res.json({ patient: toPatientDto(rows[0]) });
@@ -4057,14 +4168,93 @@ app.put('/api/patients/:id', maybeAuth, requirePermission('patients.write', 'adm
 // Delete patient
 app.delete('/api/patients/:id', maybeAuth, requirePermission('patients.delete', 'admin', 'doctor', 'assistant'), async (req, res) => {
   try {
-    const id = Number(req.params.id);
-    if (!Number.isFinite(id)) return res.status(400).json({ message: 'Ungültige Patienten-ID' });
+    const id = req.params.id;
+    if (!id) return res.status(400).json({ message: 'Ungültige Patienten-ID' });
     const { rowCount } = await req.tenant.db.query(
-      `DELETE FROM patients WHERE tenant_id = $1 AND id = $2`,
-      [req.tenant.id, id]
+      `UPDATE patients SET deleted_at = now() WHERE patient_id = $1`,
+      [id]
     );
     if (!rowCount) return res.status(404).json({ message: 'Patient nicht gefunden' });
     await audit(req, 'patient.delete', { userId: req.user?.id, patientId: id, ...clientMeta(req) });
+
+    // ── DSGVO Art. 17 — Recht auf Löschung ──────────────────────────────────
+    // Run S3 + local file cleanup non-blocking so the DELETE response is not
+    // delayed by storage operations and a storage failure never rolls back the
+    // (already committed) soft-delete.
+    const tenantCtx   = req.tenant;
+    const tenantId    = tenantCtx.id;
+    const actorUserId = req.user?.id;
+    const meta        = clientMeta(req);
+
+    // eslint-disable-next-line no-inner-declarations
+    async function _cleanupPatientStorage() {
+      // 1. S3 document cleanup (all objects under the patient's prefix)
+      if (s3docs.isS3Configured()) {
+        try {
+          const result = await s3docs.deleteAllPatientFiles(tenantId, id);
+          audit(req, 'patient.s3_purge', {
+            userId: actorUserId, patientId: id,
+            deleted: result.deleted, errors: result.errors.length,
+            ...meta,
+          });
+          if (result.errors.length > 0) {
+            console.error(`[DSGVO] S3 purge for patient ${id} had ${result.errors.length} error(s):`, result.errors);
+          } else {
+            console.info(`[DSGVO] S3 purge for patient ${id}: ${result.deleted} object(s) deleted`);
+          }
+        } catch (s3Err) {
+          console.error(`[DSGVO] S3 purge failed for patient ${id}:`, s3Err?.message || s3Err);
+          audit(req, 'patient.s3_purge_failed', {
+            userId: actorUserId, patientId: id,
+            error: s3Err?.message || String(s3Err), ...meta,
+          });
+        }
+      }
+
+      // 2. Letter PDF cleanup — pdf_path is a relative filesystem path stored
+      //    in the letters table. Remove each file from the local patientFilesDir.
+      try {
+        const { rows: letterRows } = await tenantCtx.db.query(
+          `SELECT letter_id, pdf_path FROM letters WHERE patient_id = $1 AND pdf_path IS NOT NULL`,
+          [id]
+        );
+        if (letterRows.length > 0 && tenantCtx.paths?.patientFilesDir) {
+          const baseDir = tenantCtx.paths.patientFilesDir;
+          let removedCount = 0;
+          for (const lr of letterRows) {
+            try {
+              const absPath = require('path').resolve(baseDir, lr.pdf_path);
+              // Guard: never escape the tenant's patientFilesDir
+              if (absPath.startsWith(baseDir)) {
+                await fs.promises.unlink(absPath);
+                removedCount++;
+              } else {
+                console.warn(`[DSGVO] Letter PDF path escaped tenant dir, skipping: ${lr.pdf_path}`);
+              }
+            } catch (unlinkErr) {
+              if (unlinkErr.code !== 'ENOENT') {
+                console.warn(`[DSGVO] Could not remove letter PDF ${lr.pdf_path}:`, unlinkErr.message);
+              }
+            }
+          }
+          audit(req, 'patient.letter_pdfs_purge', {
+            userId: actorUserId, patientId: id,
+            total: letterRows.length, removed: removedCount, ...meta,
+          });
+          console.info(`[DSGVO] Letter PDF purge for patient ${id}: ${removedCount}/${letterRows.length} file(s) removed`);
+        }
+      } catch (letterErr) {
+        console.error(`[DSGVO] Letter PDF purge failed for patient ${id}:`, letterErr?.message || letterErr);
+        audit(req, 'patient.letter_pdfs_purge_failed', {
+          userId: actorUserId, patientId: id,
+          error: letterErr?.message || String(letterErr), ...meta,
+        });
+      }
+    }
+
+    _cleanupPatientStorage(); // fire-and-forget — intentionally not awaited
+    // ── end DSGVO cleanup ────────────────────────────────────────────────────
+
     res.json({ ok: true });
   } catch (err) {
     console.error('Patient delete failed:', err?.message || err);
@@ -4477,8 +4667,8 @@ const tasksService = require('./lib/tasks/service');
 app.get('/api/letters', authenticateToken, requireRole('admin','arzt','assistenz'), async (req, res) => {
   try {
     const tenantCtx = await ensureRequestTenant(req);
-    const patientId = Number(req.query.patient_id || req.query.patientId);
-    if (!Number.isFinite(patientId)) return res.status(400).json({ message: 'patient_id fehlt' });
+    const patientId = req.query.patient_id || req.query.patientId || null;
+    if (!patientId) return res.status(400).json({ message: 'patient_id fehlt' });
     const list = await letters.listLetters(tenantCtx, patientId);
     res.json({ items: list });
   } catch (err) {
@@ -4593,8 +4783,8 @@ const sickNotes = require('./lib/sicknotes/service');
 app.get('/api/sick-notes', authenticateToken, requireRole('admin','arzt','assistenz'), async (req, res) => {
   try {
     const tenantCtx = await ensureRequestTenant(req);
-    const patientId = Number(req.query.patient_id || req.query.patientId);
-    if (!Number.isFinite(patientId)) return res.status(400).json({ message: 'patient_id fehlt' });
+    const patientId = req.query.patient_id || req.query.patientId || null;
+    if (!patientId) return res.status(400).json({ message: 'patient_id fehlt' });
     const list = await sickNotes.listSickNotes(tenantCtx, patientId);
     res.json({ items: list });
   } catch (err) {
@@ -4694,7 +4884,7 @@ app.get('/api/tasks/unreadCount', authenticateToken, requirePermission('tasks.re
   try {
     const tenantCtx = await ensureRequestTenant(req);
     const statuses = (req.query.status || '').split(',').map(s => s.trim()).filter(Boolean);
-    const count = await tasksService.unreadCount(tenantCtx, req.user?.id, statuses.length ? statuses : ['OPEN','IN_PROGRESS']);
+    const count = await tasksService.unreadCount(tenantCtx, req.user?.id, statuses.length ? statuses.map(s => s.toLowerCase()) : ['open','in_progress']);
     res.json({ count });
   } catch (err) {
     res.status(500).json({ message: 'Unread-Count konnte nicht ermittelt werden' });
@@ -4707,12 +4897,12 @@ app.get('/api/tasks', authenticateToken, requirePermission('tasks.read', 'admin'
     const tenantCtx = await ensureRequestTenant(req);
     const q = req.query || {};
     const filters = {
-      assignedToUserId: q.assigned_to_user_id ? Number(q.assigned_to_user_id) : (q.assignedToUserId ? Number(q.assignedToUserId) : undefined),
-      createdByUserId: q.created_by_user_id ? Number(q.created_by_user_id) : (q.createdByUserId ? Number(q.createdByUserId) : undefined),
+      assignedToUserId: q.assigned_to_user_id || q.assignedToUserId || undefined,
+      createdByUserId: q.created_by_user_id || q.createdByUserId || undefined,
       status: q.status ? String(q.status).split(',') : undefined,
       priority: q.priority ? String(q.priority).split(',') : undefined,
       type: q.type || undefined,
-      patientId: q.patient_id ? Number(q.patient_id) : (q.patientId ? Number(q.patientId) : undefined),
+      patientId: q.patient_id || q.patientId || undefined,
       search: q.q || q.search || undefined,
       limit: q.limit ? Number(q.limit) : 50,
       offset: q.offset ? Number(q.offset) : 0,
@@ -4774,7 +4964,7 @@ app.post('/api/tasks/:id/comments', authenticateToken, requirePermission('tasks.
   try {
     const tenantCtx = await ensureRequestTenant(req);
     const comment = await tasksService.addComment(tenantCtx, req.params.id, req.body?.comment_text || req.body?.commentText, req.user?.id || null);
-    audit(req, 'task.comment', { userId: req.user?.id, taskId: Number(req.params.id), commentId: comment.id, ...clientMeta(req) });
+    audit(req, 'task.comment', { userId: req.user?.id, taskId: req.params.id, commentId: comment.id, ...clientMeta(req) });
     res.status(201).json(comment);
   } catch (err) {
     const msg = err?.message || 'Kommentar konnte nicht hinzugefügt werden';
@@ -4798,48 +4988,47 @@ app.post('/api/tasks/:id/read', authenticateToken, requirePermission('tasks.read
 // ── Termine / Appointments
 async function canWriteCalendar({ db, tenantId, calendarId, userId, isAdmin }) {
   const { rows } = await db.query(
-    `SELECT id, type
+    `SELECT calendar_id, is_shared, owner_user_id
        FROM calendars
-      WHERE id = $1
-        AND tenant_id = $2
+      WHERE calendar_id = $1
       LIMIT 1`,
-    [calendarId, tenantId]
+    [calendarId]
   );
   if (!rows.length) return { ok: false, reason: 'not_found' };
-  if (rows[0].type === 'tenant' || isAdmin) return { ok: true, type: rows[0].type };
+  if (rows[0].is_shared || isAdmin) return { ok: true };
+  if (rows[0].owner_user_id === userId) return { ok: true };
   const { rows: memberRows } = await db.query(
     `SELECT 1
        FROM calendar_members
       WHERE calendar_id = $1
         AND user_id = $2
-        AND role IN ('owner', 'editor')
+        AND permission = 'write'
       LIMIT 1`,
     [calendarId, userId]
   );
   if (!memberRows.length) return { ok: false, reason: 'forbidden' };
-  return { ok: true, type: rows[0].type };
+  return { ok: true };
 }
 
 async function canWriteAppointment({ db, tenantId, appointmentId, userId, isAdmin }) {
   const { rows } = await db.query(
-    `SELECT a.calendar_id, c.type
+    `SELECT a.calendar_id, c.is_shared, c.owner_user_id
        FROM appointments a
        JOIN calendars c
-         ON c.id = a.calendar_id
-        AND c.tenant_id = a.tenant_id
-      WHERE a.tenant_id = $1
-        AND a.id = $2
+         ON c.calendar_id = a.calendar_id
+      WHERE a.appointment_id = $1
       LIMIT 1`,
-    [tenantId, appointmentId]
+    [appointmentId]
   );
   if (!rows.length) return { ok: false, reason: 'not_found' };
-  if (rows[0].type === 'tenant' || isAdmin) return { ok: true, calendarId: rows[0].calendar_id };
+  if (rows[0].is_shared || isAdmin) return { ok: true, calendarId: rows[0].calendar_id };
+  if (rows[0].owner_user_id === userId) return { ok: true, calendarId: rows[0].calendar_id };
   const { rows: memberRows } = await db.query(
     `SELECT 1
        FROM calendar_members
       WHERE calendar_id = $1
         AND user_id = $2
-        AND role IN ('owner', 'editor')
+        AND permission = 'write'
       LIMIT 1`,
     [rows[0].calendar_id, userId]
   );
@@ -4851,11 +5040,11 @@ async function canWriteAppointment({ db, tenantId, appointmentId, userId, isAdmi
 app.get('/api/appointments/by-calendars', maybeAuth, requirePermission('appointments.read', 'admin', 'doctor', 'assistant'), async (req, res) => {
   try {
     const tenantId = req.tenant.id;
-    const userId = Number(req.user?.id) || 0;
+    const userId = req.user?.id || null;
     const isAdmin = isAdminAuth(req);
     const idsParam = String(req.query.ids || '').trim();
     if (!idsParam) return res.status(400).json({ message: 'ids erforderlich' });
-    const idList = idsParam.split(',').map(s => s.trim()).filter(Boolean).map(v => BigInt(v));
+    const idList = idsParam.split(',').map(s => s.trim()).filter(Boolean);
     const from = req.query.from ? new Date(String(req.query.from)) : null;
     const to = req.query.to ? new Date(String(req.query.to)) : null;
     if (!from || !to || Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) {
@@ -4870,11 +5059,11 @@ app.get('/api/appointments/by-calendars', maybeAuth, requirePermission('appointm
     if (!Number.isFinite(limit) || limit <= 0) limit = 500;
     limit = Math.min(limit, 1000);
 
-    const params = [tenantId, idList];
+    const params = [idList];
     let i = params.length;
     const rangeConds = [];
-    params.push(from); rangeConds.push(`a.starts_at >= $${++i}`);
-    params.push(to);   rangeConds.push(`a.starts_at <= $${++i}`);
+    params.push(from); rangeConds.push(`a.start_at >= $${++i}`);
+    params.push(to);   rangeConds.push(`a.start_at <= $${++i}`);
 
     // Keyset pagination via cursor="<ISO>_<id>"
     const cursor = String(req.query.cursor || '').trim();
@@ -4883,10 +5072,10 @@ app.get('/api/appointments/by-calendars', maybeAuth, requirePermission('appointm
       const parts = cursor.split('_');
       if (parts.length === 2) {
         const cDate = new Date(parts[0]);
-        const cId = Number(parts[1]);
-        if (!Number.isNaN(cDate.getTime()) && Number.isFinite(cId)) {
+        const cId = parts[1];
+        if (!Number.isNaN(cDate.getTime()) && cId) {
           params.push(cDate); params.push(cId);
-          rangeConds.push(`(a.starts_at, a.id) > ($${++i - 1}::timestamptz, $${i}::bigint)`);
+          rangeConds.push(`(a.start_at, a.appointment_id) > ($${++i - 1}::timestamptz, $${i}::uuid)`);
           hasCursor = true;
         }
       }
@@ -4894,21 +5083,21 @@ app.get('/api/appointments/by-calendars', maybeAuth, requirePermission('appointm
 
     // Enforce access: tenant + membership for non-tenant calendars
     const sql = `
-      SELECT a.*, p.name AS patient_name, p.vorname, p.nachname
+      SELECT a.*, COALESCE(p.first_name || ' ' || p.last_name, '') AS patient_name,
+             p.first_name, p.last_name
         FROM appointments a
-        LEFT JOIN patients p ON p.id = a.patient_id AND p.tenant_id = a.tenant_id
-        JOIN calendars c ON c.id = a.calendar_id
-       WHERE a.tenant_id = $1
-         AND a.calendar_id = ANY($2)
+        LEFT JOIN patients p ON p.patient_id = a.patient_id
+        JOIN calendars c ON c.calendar_id = a.calendar_id
+       WHERE a.calendar_id = ANY($1)
          ${rangeConds.length ? ' AND ' + rangeConds.join(' AND ') : ''}
          AND (
            $${++i}::boolean = true
-           OR c.type = 'tenant'
+           OR c.is_shared = true
            OR EXISTS (
              SELECT 1 FROM calendar_members m WHERE m.calendar_id = a.calendar_id AND m.user_id = $${++i}
            )
          )
-       ORDER BY a.starts_at ASC, a.id ASC
+       ORDER BY a.start_at ASC, a.appointment_id ASC
        LIMIT $${++i}`;
     params.push(isAdmin);
     params.push(userId);
@@ -4918,7 +5107,7 @@ app.get('/api/appointments/by-calendars', maybeAuth, requirePermission('appointm
     let page = rows;
     if (rows.length > limit) {
       const last = rows[limit - 1];
-      next_cursor = `${new Date(last.starts_at).toISOString()}_${last.id}`;
+      next_cursor = `${new Date(last.start_at).toISOString()}_${last.appointment_id}`;
       page = rows.slice(0, limit);
     }
     res.set('Cache-Control', 'no-store, private');
@@ -4933,73 +5122,46 @@ app.get('/api/appointments', maybeAuth, requirePermission('appointments.read', '
   try {
     const q = req.query || {};
     const type = String(q.type || '').toLowerCase();
-    const userFilter = q.user_id ? Number(q.user_id) : null;
-    const patientFilter = q.patient_id ? Number(q.patient_id) : null;
+    const userFilter = q.user_id ? String(q.user_id) : null;
+    const patientFilter = q.patient_id ? String(q.patient_id) : null;
     // If no legacy filters were provided and no patient filter, ask client to use by-calendars endpoint
-    if (!type && !Number.isFinite(userFilter) && !Number.isFinite(patientFilter)) {
+    if (!type && !userFilter && !patientFilter) {
       return res.status(400).json({ message: 'Bitte /api/appointments/by-calendars verwenden' });
     }
 
-    const conds = ['a.tenant_id = $1'];
-    const params = [req.tenant.id];
+    const conds = [];
+    const params = [];
     let i = params.length;
 
-    if (Number.isFinite(patientFilter)) {
+    if (patientFilter) {
       conds.push(`a.patient_id = $${++i}`);
       params.push(patientFilter);
     }
 
-    if (type === 'general') {
-      // Backward compatibility: treat NULL source as 'general'
-      conds.push(`COALESCE(a.source,'general') = 'general'`);
-      if (userFilter && Number.isFinite(userFilter)) {
-        conds.push(`a.user_id = $${++i}`);
-        params.push(userFilter);
-      }
-    } else if (Number.isFinite(userFilter)) {
-      // user calendar: explicit user-source OR general assigned to that user (including legacy via doctor_id)
-      const next = ++i; params.push(userFilter);
-      conds.push(`( (a.source = 'user' AND a.user_id = $${next})
-                   OR (COALESCE(a.source,'general') = 'general' AND a.user_id = $${next})
-                   OR (a.user_id IS NULL AND a.doctor_id = $${next}) )`);
+    if (userFilter) {
+      conds.push(`a.created_by = $${++i}`);
+      params.push(userFilter);
     }
 
     let rows;
     try {
       ({ rows } = await req.tenant.db.query(
         `SELECT a.*,
-                p.name AS patient_name,
-                p.vorname,
-                p.nachname,
-                u.name AS doctor_name,
+                COALESCE(p.first_name || ' ' || p.last_name, '') AS patient_name,
+                p.first_name, p.last_name,
+                u.display_name AS doctor_name,
                 u.email AS doctor_email
            FROM appointments a
-           LEFT JOIN patients p ON p.id = a.patient_id AND p.tenant_id = a.tenant_id
-           LEFT JOIN users u ON u.id = a.doctor_id AND u.tenant_id = a.tenant_id
-          WHERE ${conds.join(' AND ')}
-          ORDER BY a.starts_at NULLS LAST, a.id ASC`,
+           LEFT JOIN patients p ON p.patient_id = a.patient_id
+           LEFT JOIN users u ON u.user_id = a.created_by
+          WHERE ${conds.length ? conds.join(' AND ') : 'TRUE'}
+          ORDER BY a.start_at NULLS LAST, a.appointment_id ASC`,
         params
       ));
     } catch (e) {
-      // Fallback for legacy schema without source/user_id columns
-      const fbConds = ['a.tenant_id = $1'];
-      const fbParams = [req.tenant.id];
-      let j = fbParams.length;
-      if (Number.isFinite(userFilter)) { fbConds.push(`a.doctor_id = $${++j}`); fbParams.push(userFilter); }
-      if (Number.isFinite(patientFilter)) { fbConds.push(`a.patient_id = $${++j}`); fbParams.push(patientFilter); }
+      console.error('Appointment query error, trying simplified:', e?.message);
       ({ rows } = await req.tenant.db.query(
-        `SELECT a.*,
-                p.name AS patient_name,
-                p.vorname,
-                p.nachname,
-                u.name AS doctor_name,
-                u.email AS doctor_email
-           FROM appointments a
-           LEFT JOIN patients p ON p.id = a.patient_id AND p.tenant_id = a.tenant_id
-           LEFT JOIN users u ON u.id = a.doctor_id AND u.tenant_id = a.tenant_id
-          WHERE ${fbConds.join(' AND ')}
-          ORDER BY a.starts_at NULLS LAST, a.id ASC`,
-        fbParams
+        `SELECT a.* FROM appointments a WHERE TRUE ORDER BY a.start_at NULLS LAST, a.appointment_id ASC`
       ));
     }
     res.set('Cache-Control', 'no-store, private');
@@ -5013,38 +5175,33 @@ app.get('/api/appointments', maybeAuth, requirePermission('appointments.read', '
 
 app.post('/api/appointments', maybeAuth, requirePermission('appointments.write', 'admin', 'doctor', 'assistant'), async (req, res) => {
   const body = req.body || {};
-  const requesterId = Number(req.user?.id) || 0;
+  const requesterId = req.user?.id || null;
   const isAdmin = isAdminAuth(req);
   // DTO whitelist + trims
-  const allowedKeys = new Set(['calendar_id','patient_id','starts_at','termin_datum','startzeit','end_time','duration_minutes','duration','reason','beschreibung','status','type','source','user_id','doctor_id','doctorId','doctor_email','doctorEmail']);
+  const allowedKeys = new Set(['calendar_id','patient_id','starts_at','termin_datum','startzeit','end_time','duration_minutes','duration','reason','beschreibung','status','type','source','user_id','doctor_id','doctorId','doctor_email','doctorEmail','room_id','title','start_at','end_at','termin_name','start_time']);
   const unknown = Object.keys(body).filter(k => !allowedKeys.has(k));
   if (unknown.length) return res.status(400).json({ message: 'Unbekannte Felder' });
   const patientIdRaw = body.patient_id || body.patientId;
-  const patientId = Number(patientIdRaw);
-  // patient_id ist optional
-  if (patientIdRaw !== undefined && !Number.isFinite(patientId)) {
-    return res.status(400).json({ message: 'Ungültige Patienten-ID' });
-  }
-  let calendarId = Number(body.calendar_id);
-  if (!Number.isFinite(calendarId)) {
+  const patientId = patientIdRaw ? String(patientIdRaw) : null;
+  // patient_id ist optional (no type coercion needed for UUID strings)
+  let calendarId = body.calendar_id ? String(body.calendar_id) : null;
+  if (!calendarId) {
     // Fallback: use default tenant calendar or create one
     const { rows: calDefaults } = await req.tenant.db.query(
-      `SELECT id FROM calendars
-         WHERE tenant_id = $1
-         ORDER BY (is_default = true) DESC, id ASC
-         LIMIT 1`,
-      [req.tenant.id]
+      `SELECT calendar_id FROM calendars
+         ORDER BY (is_shared = true) DESC, calendar_id ASC
+         LIMIT 1`
     );
     if (calDefaults.length) {
-      calendarId = calDefaults[0].id;
+      calendarId = calDefaults[0].calendar_id;
     } else {
       const { rows: created } = await req.tenant.db.query(
-        `INSERT INTO calendars(tenant_id, name, type, is_default)
-         VALUES ($1, 'Allgemeiner Kalender', 'tenant', true)
-         RETURNING id`,
-        [req.tenant.id]
+        `INSERT INTO calendars(name, owner_user_id, is_shared)
+         VALUES ('Allgemeiner Kalender', $1, true)
+         RETURNING calendar_id`,
+        [requesterId]
       );
-      calendarId = created[0].id;
+      calendarId = created[0].calendar_id;
     }
   }
 
@@ -5080,7 +5237,7 @@ app.post('/api/appointments', maybeAuth, requirePermission('appointments.write',
   const normalizedStatus = ['scheduled','completed','cancelled'].includes(status) ? status : 'scheduled';
   const source = (body.type || body.source || 'general').toLowerCase() === 'user' ? 'user' : 'general';
   const doctorId = await resolveDoctorId(req.tenant, body.doctor_id || body.doctorId || body.doctorEmail || body.doctor_email, req.user);
-  const userId = Number(body.user_id) && Number.isFinite(Number(body.user_id)) ? Number(body.user_id) : null;
+  const userId = body.user_id ? String(body.user_id) : null;
   const beschreibung = body.beschreibung ? String(body.beschreibung).trim().slice(0,2000) : null;
 
   try {
@@ -5096,35 +5253,26 @@ app.post('/api/appointments', maybeAuth, requirePermission('appointments.write',
       return res.status(403).json({ message: 'Keine Schreibrechte auf diesen Kalender' });
     }
     let rows;
-    // Insert with optional patient_id
+    // Insert with Flyway V5 schema columns
     ({ rows } = await req.tenant.db.query(
       `INSERT INTO appointments (
-         tenant_id, calendar_id, patient_id, doctor_id, user_id, source, starts_at, duration_minutes, reason, status,
-         termin_name, beschreibung, termin_datum, startzeit, endzeit
+         calendar_id, patient_id, created_by, title, start_at, end_at, status
        ) VALUES (
-         $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,
-         $9,$11,$12,$13,$14
+         $1,$2,$3,$4,$5,$6,$7
        )
        RETURNING *`,
       [
-        req.tenant.id,
         calendarId,
-        Number.isFinite(patientId) ? patientId : null,
-        doctorId,
-        userId,
-        source,
-        startsDate,
-        duration,
+        patientId || null,
+        requesterId,
         reason,
-        normalizedStatus,
-        beschreibung,
-        startsDate.toISOString().slice(0, 10),
-        startsDate.toISOString().slice(11, 19),
-        endDate ? endDate.toISOString().slice(11, 19) : null
+        startsDate,
+        endDate,
+        normalizedStatus
       ]
     ));
     const appointment = rows[0];
-    await audit(req, 'calendar.appointment.created', { appointmentId: appointment.id, patientId, userId, ...clientMeta(req) });
+    await audit(req, 'calendar.appointment.created', { appointmentId: appointment.appointment_id, patientId, userId, ...clientMeta(req) });
     res.status(201).json(toAppointmentDto(appointment));
   } catch (err) {
     console.error('Appointment creation failed:', { code: err?.code, constraint: err?.constraint, message: err?.message });
@@ -5142,12 +5290,12 @@ app.post('/api/appointments', maybeAuth, requirePermission('appointments.write',
 
 // Update appointment (time move, edits) and keep semantics
 app.put('/api/appointments/:id', maybeAuth, requirePermission('appointments.write', 'admin', 'doctor', 'assistant'), async (req, res) => {
-  const id = Number(req.params.id);
-  if (!Number.isFinite(id)) return res.status(400).json({ message: 'Ungültige ID' });
-  const requesterId = Number(req.user?.id) || 0;
+  const id = req.params.id;
+  if (!id) return res.status(400).json({ message: 'Ungültige ID' });
+  const requesterId = req.user?.id || null;
   const isAdmin = isAdminAuth(req);
   const body = req.body || {};
-  const allowedKeys = new Set(['calendar_id','starts_at','duration_minutes','reason','beschreibung','status','type','source','user_id','patient_id']);
+  const allowedKeys = new Set(['calendar_id','starts_at','duration_minutes','reason','beschreibung','status','type','source','user_id','patient_id','room_id','title','start_at','end_at','end_time','termin_name','start_time']);
   const unknown = Object.keys(body).filter(k => !allowedKeys.has(k));
   if (unknown.length) return res.status(400).json({ message: 'Unbekannte Felder' });
   const sourceAccess = await canWriteAppointment({
@@ -5162,22 +5310,30 @@ app.put('/api/appointments/:id', maybeAuth, requirePermission('appointments.writ
     return res.status(403).json({ message: 'Keine Schreibrechte auf diesen Kalender' });
   }
   const fields = [];
-  const params = [req.tenant.id, id];
+  const params = [id];
   let i = params.length;
-  if (body.starts_at) { fields.push(`starts_at = $${++i}`); params.push(new Date(body.starts_at)); }
-  if (body.duration_minutes) { fields.push(`duration_minutes = $${++i}`); params.push(Number(body.duration_minutes)); }
-  if (body.reason !== undefined) { let r = String(body.reason||'').trim(); if (r.length>500) r=r.slice(0,500); fields.push(`reason = $${++i}`); params.push(r || null); }
-  if (body.status) { fields.push(`status = $${++i}`); params.push(String(body.status).toLowerCase()); }
-  if (body.beschreibung !== undefined || body.description !== undefined) { let b = String(body.beschreibung || body.description || '').trim(); if (b.length>2000) b=b.slice(0,2000); fields.push(`beschreibung = $${++i}`); params.push(b || null); }
-  if (body.user_id !== undefined) { fields.push(`user_id = $${++i}`); params.push(Number(body.user_id) || null); }
-  if (body.patient_id !== undefined) { fields.push(`patient_id = $${++i}`); params.push(Number(body.patient_id) || null); }
-  if (body.source !== undefined || body.type !== undefined) {
-    const src = (body.type || body.source || '').toLowerCase();
-    if (src === 'general' || src === 'user') { fields.push(`source = $${++i}`); params.push(src); }
+  if (body.starts_at) {
+    fields.push(`start_at = $${++i}`); params.push(new Date(body.starts_at));
+    // Recalculate end_at if duration given
+    const dur = Number(body.duration_minutes || body.duration || 30);
+    const endAt = new Date(new Date(body.starts_at).getTime() + dur * 60000);
+    fields.push(`end_at = $${++i}`); params.push(endAt);
   }
+  if (body.end_time) { fields.push(`end_at = $${++i}`); params.push(new Date(body.end_time)); }
+  if (body.reason !== undefined || body.beschreibung !== undefined || body.description !== undefined) {
+    let r = String(body.reason || body.beschreibung || body.description || '').trim();
+    if (r.length > 500) r = r.slice(0, 500);
+    fields.push(`title = $${++i}`); params.push(r || null);
+  }
+  if (body.status) {
+    const s = String(body.status).toLowerCase();
+    if (['scheduled','completed','cancelled'].includes(s)) { fields.push(`status = $${++i}`); params.push(s); }
+  }
+  if (body.patient_id !== undefined) { fields.push(`patient_id = $${++i}`); params.push(body.patient_id || null); }
+  if (body.room_id !== undefined) { fields.push(`room_id = $${++i}`); params.push(body.room_id || null); }
   if (body.calendar_id !== undefined) {
-    const newCalId = Number(body.calendar_id);
-    if (!Number.isFinite(newCalId)) return res.status(400).json({ message: 'Ungültiger calendar_id' });
+    const newCalId = body.calendar_id ? String(body.calendar_id) : null;
+    if (!newCalId) return res.status(400).json({ message: 'Ungültiger calendar_id' });
     const targetAccess = await canWriteCalendar({
       db: req.tenant.db,
       tenantId: req.tenant.id,
@@ -5195,7 +5351,7 @@ app.put('/api/appointments/:id', maybeAuth, requirePermission('appointments.writ
   try {
     const { rows } = await req.tenant.db.query(
       `UPDATE appointments SET ${fields.join(', ')}
-        WHERE tenant_id = $1 AND id = $2
+        WHERE appointment_id = $1
         RETURNING *`,
       params
     );
@@ -5213,8 +5369,8 @@ app.delete('/api/appointments/:id', maybeAuth, requirePermission('appointments.w
     const access = await canWriteAppointment({
       db: req.tenant.db,
       tenantId: req.tenant.id,
-      appointmentId: Number(req.params.id),
-      userId: Number(req.user?.id) || 0,
+      appointmentId: req.params.id,
+      userId: req.user?.id || null,
       isAdmin: isAdminAuth(req)
     });
     if (!access.ok) {
@@ -5223,10 +5379,9 @@ app.delete('/api/appointments/:id', maybeAuth, requirePermission('appointments.w
     }
     const { rows } = await req.tenant.db.query(
       `DELETE FROM appointments
-        WHERE tenant_id = $1
-          AND id = $2
+        WHERE appointment_id = $1
         RETURNING *`,
-      [req.tenant.id, req.params.id]
+      [req.params.id]
     );
     if (rows.length === 0) return res.status(404).json({ message: 'Termin nicht gefunden' });
     await audit(req, 'calendar.appointment.deleted', { appointmentId: req.params.id, ...clientMeta(req) });
@@ -5243,8 +5398,8 @@ app.get('/api/users/accessible', maybeAuth, requirePermission('appointments.read
     const role = String(req.user?.role || req.user?.rolle || '').toLowerCase();
     if (role === 'admin' || role === 'doctor') {
       const { rows } = await req.tenant.db.query(
-        `SELECT id, name, vorname, nachname, email, role FROM users WHERE tenant_id = $1 ORDER BY name NULLS LAST, vorname NULLS LAST, id`,
-        [req.tenant.id]
+        `SELECT u.user_id AS id, u.display_name AS name, u.first_name AS vorname, u.last_name AS nachname, u.email, r.name AS role, r.name AS rolle FROM users u LEFT JOIN roles r ON r.role_id = u.role_id WHERE u.deleted_at IS NULL ORDER BY u.display_name NULLS LAST, u.first_name NULLS LAST, u.user_id`,
+        []
       );
       res.json(rows.map(u => ({ id: u.id, name: u.name || [u.vorname, u.nachname].filter(Boolean).join(' ') || u.email, role: u.role })));
     } else {
@@ -5260,11 +5415,12 @@ app.get('/api/users/accessible', maybeAuth, requirePermission('appointments.read
 app.get('/api/doctors', maybeAuth, requirePermission('appointments.read', 'admin', 'doctor', 'assistant'), async (req, res) => {
   try {
     const { rows } = await req.tenant.db.query(
-      `SELECT id, name, vorname, nachname, email, role, metadata, created_at, updated_at
-         FROM users
-        WHERE tenant_id = $1 AND role = 'doctor'
-        ORDER BY name NULLS LAST, vorname NULLS LAST, id`,
-      [req.tenant.id]
+      `SELECT u.user_id AS id, u.display_name AS name, u.first_name AS vorname, u.last_name AS nachname, u.email, r.name AS role, u.created_at, u.updated_at
+         FROM users u
+         LEFT JOIN roles r ON r.role_id = u.role_id
+        WHERE u.deleted_at IS NULL AND lower(r.name) = 'doctor'
+        ORDER BY u.display_name NULLS LAST, u.first_name NULLS LAST, u.user_id`,
+      []
     );
     const mapped = rows.map((u) => {
       const meta = u.metadata || {};
@@ -5292,11 +5448,11 @@ app.get('/api/doctors', maybeAuth, requirePermission('appointments.read', 'admin
 
 app.put('/api/doctors/:id', maybeAuth, requirePermission('users.manage', 'admin', 'assistant'), async (req, res) => {
   try {
-    const id = Number(req.params.id);
-    if (!Number.isFinite(id)) return res.status(400).json({ message: 'Ungültige ID' });
+    const id = req.params.id;
+    if (!id) return res.status(400).json({ message: 'Ungültige ID' });
     const { rows } = await req.tenant.db.query(
-      `SELECT id, role, metadata, name, vorname, nachname, email FROM users WHERE tenant_id = $1 AND id = $2`,
-      [req.tenant.id, id]
+      `SELECT u.user_id AS id, r.name AS role, u.display_name AS name, u.first_name AS vorname, u.last_name AS nachname, u.email FROM users u LEFT JOIN roles r ON r.role_id = u.role_id WHERE u.deleted_at IS NULL AND u.user_id = $1`,
+      [id]
     );
     if (!rows.length) return res.status(404).json({ message: 'Arzt nicht gefunden' });
     const existing = rows[0];
@@ -5317,24 +5473,23 @@ app.put('/api/doctors/:id', maybeAuth, requirePermission('users.manage', 'admin'
 
     const { rows: updated } = await req.tenant.db.query(
       `UPDATE users
-          SET name = $3,
-              vorname = $4,
-              nachname = $5,
-              metadata = $6,
+          SET display_name = $2,
+              first_name = $3,
+              last_name = $4,
               updated_at = now()
-        WHERE tenant_id = $1 AND id = $2
-      RETURNING id, name, vorname, nachname, email, role, metadata, created_at, updated_at`,
-      [req.tenant.id, id, newName, newVorname, newNachname, updatedMeta]
+        WHERE user_id = $1 AND deleted_at IS NULL
+      RETURNING user_id AS id, display_name AS name, first_name AS vorname, last_name AS nachname, email, created_at, updated_at`,
+      [id, newName, newVorname, newNachname]
     );
     const u = updated[0];
-    const metaOut = u.metadata || {};
+    const metaOut = {};
     res.json({
       id: u.id,
       name: u.name || [u.vorname, u.nachname].filter(Boolean).join(' ') || u.email,
       vorname: u.vorname || '',
       nachname: u.nachname || '',
       email: u.email || '',
-      role: u.role,
+      role: existing.role,
       fachrichtung: metaOut.fachrichtung || '',
       sparte: metaOut.sparte || '',
       dignitaet: metaOut.dignitaet || '',
@@ -6349,12 +6504,12 @@ async function listInsurancesHandler(req, res) {
   try {
     const tenantCtx = await ensureRequestTenant(req);
     const { q = '', active = 'true', limit = 2000, ean = '' } = req.query || {};
-    const params = [tenantCtx.id];
-    let sql = `SELECT id, name, short_name, address, zip, city, canton, ean, zsr_code, bfs_code, phone, email, billing_contact, kvnr, active
-                 FROM insurances WHERE tenant_id = $1`;
+    const params = [];
+    let sql = `SELECT insurance_id AS id, name, short_name, address, postal_code AS zip, city, canton, ean, zsr_code, bfs_code, phone, email, billing_contact, kvnr, is_active AS active
+                 FROM insurances WHERE 1=1`;
     if (String(active).toLowerCase() !== 'all') {
       params.push(String(active).toLowerCase() === 'true');
-      sql += ` AND active = $${params.length}`;
+      sql += ` AND is_active = $${params.length}`;
     }
     if (ean) {
       params.push(String(ean).trim());
@@ -6384,18 +6539,9 @@ app.get('/api/krankenkassen', maybeAuth, requireRole('admin','doctor','assistant
 app.get('/api/insurance', maybeAuth, requireRole('admin','abrechnung','arzt'), async (req, res) => {
   try {
     const tenantCtx = await ensureRequestTenant(req);
-    // Ensure table exists (idempotent)
-    await tenantCtx.db.query(`
-      CREATE TABLE IF NOT EXISTS insurance (
-        id SERIAL PRIMARY KEY,
-        tenant_id VARCHAR(64) DEFAULT NULL,
-        name VARCHAR(255) NOT NULL,
-        code VARCHAR(64) UNIQUE NOT NULL,
-        created_at TIMESTAMP DEFAULT NOW()
-      );
-    `);
+    // Use the V5 insurances table
     const { rows } = await tenantCtx.db.query(
-      'SELECT id, name, code FROM insurance ORDER BY name ASC'
+      'SELECT insurance_id AS id, name, ean AS code FROM insurances WHERE deleted_at IS NULL ORDER BY name ASC'
     );
     res.json(rows);
   } catch (err) {
@@ -6848,8 +6994,8 @@ async function resolvePatientHandler(req, res) {
     // Shortcut: direkte ID-Abfrage zulassen, um 500-Fehler bei id-Only-Calls zu vermeiden
     if (id != null && String(id).trim().length) {
       const { rows } = await req.tenant.db.query(
-        `SELECT * FROM patients WHERE tenant_id = $1 AND id = $2 LIMIT 1`,
-        [tenantId, String(id).trim()]
+        `SELECT * FROM patients WHERE patient_id = $1 AND deleted_at IS NULL LIMIT 1`,
+        [String(id).trim()]
       );
       if (rows.length) return res.json(toPatientDto(rows[0]));
       return res.status(404).json({ message: 'Patient nicht gefunden' });
@@ -6859,10 +7005,10 @@ async function resolvePatientHandler(req, res) {
       const { rows } = await req.tenant.db.query(
         `SELECT *
            FROM patients
-          WHERE tenant_id = $1
-            AND (insurance_number = $2 OR versichertennummer = $2)
+          WHERE insurance_number = $1
+            AND deleted_at IS NULL
           LIMIT 1`,
-        [tenantId, insuranceCandidate]
+        [insuranceCandidate]
       );
       if (rows.length) return res.json(toPatientDto(rows[0]));
     }
@@ -6873,11 +7019,11 @@ async function resolvePatientHandler(req, res) {
       const { rows: exactRows } = await req.tenant.db.query(
         `SELECT *
            FROM patients
-          WHERE tenant_id = $1
-            AND lower(coalesce(vorname, '')) = lower($2)
-            AND lower(coalesce(nachname, '')) = lower($3)
+          WHERE deleted_at IS NULL
+            AND lower(coalesce(first_name, '')) = lower($1)
+            AND lower(coalesce(last_name, '')) = lower($2)
           LIMIT 1`,
-        [tenantId, first, last]
+        [first, last]
       );
       if (exactRows.length) return res.json(toPatientDto(exactRows[0]));
 
@@ -6885,16 +7031,16 @@ async function resolvePatientHandler(req, res) {
       const { rows: fuzzyRows } = await req.tenant.db.query(
         `SELECT p.*,
                 (
-                  CASE WHEN lower(coalesce(p.vorname,'')) LIKE lower($2) THEN 1 ELSE 0 END +
-                  CASE WHEN lower(coalesce(p.nachname,'')) LIKE lower($3) THEN 1 ELSE 0 END +
-                  CASE WHEN $4 IS NOT NULL AND (p.adresse ILIKE $4 OR p.ort ILIKE $4 OR (p.address::text ILIKE $4)) THEN 1 ELSE 0 END
+                  CASE WHEN lower(coalesce(p.first_name,'')) LIKE lower($2) THEN 1 ELSE 0 END +
+                  CASE WHEN lower(coalesce(p.last_name,'')) LIKE lower($3) THEN 1 ELSE 0 END +
+                  CASE WHEN $4 IS NOT NULL AND (p.street ILIKE $4 OR p.city ILIKE $4) THEN 1 ELSE 0 END
                 ) AS score
            FROM patients p
-          WHERE p.tenant_id = $1
-            AND (p.vorname ILIKE $2 OR p.nachname ILIKE $3 OR p.name ILIKE $5)
+          WHERE p.deleted_at IS NULL
+            AND (p.first_name ILIKE $1 OR p.last_name ILIKE $2 OR (p.first_name || ' ' || p.last_name) ILIKE $4)
           ORDER BY score DESC
           LIMIT 1`,
-        [tenantId, `%${first}%`, `%${last}%`, likeAdr, `%${first} ${last}%`]
+        [`%${first}%`, `%${last}%`, likeAdr, `%${first} ${last}%`]
       );
       if (fuzzyRows.length) return res.json(toPatientDto(fuzzyRows[0]));
     }

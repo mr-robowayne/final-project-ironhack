@@ -101,6 +101,7 @@ BEGIN
     RAISE NOTICE '[SEED] Admin user "%" already exists (id=%). Skipping.', v_admin_email, v_user_id;
   ELSE
     -- Insert admin user with bcrypt-hashed password (pgcrypto gen_salt bf = bcrypt rounds 10)
+    -- V5 schema: includes display_name column
     EXECUTE format($$
       INSERT INTO %I.users (
         email,
@@ -108,6 +109,7 @@ BEGIN
         role_id,
         first_name,
         last_name,
+        display_name,
         is_active
       )
       VALUES (
@@ -116,6 +118,7 @@ BEGIN
         $3,
         $4,
         $5,
+        $4 || ' ' || $5,
         true
       )
       RETURNING user_id

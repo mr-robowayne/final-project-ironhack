@@ -28,12 +28,12 @@ const toISODateOnly = (input) => {
 };
 
 const extractPatientId = (claim) => {
-  const pid = claim?.patient?.id ?? claim?.patient_id ?? null;
+  const pid = claim?.patient?.id ?? claim?.patient?.patient_id ?? claim?.patient_id ?? null;
   if (!pid) throw new Error('Patienten-ID fehlt im Claim-Payload.');
-  return Number(pid);
+  return pid;
 };
 
-// XSD-Validierung via xmllint (optional, abhängig von Aufrufparametern)
+// XSD-Validierung via xmllint (optional, abhaengig von Aufrufparametern)
 async function validateXMLWithXSD(xmlString, xsdPath) {
   if (!xmlString || !xsdPath) return { ok: true };
   const tmp = require('os').tmpdir();
@@ -56,8 +56,8 @@ async function validateXMLWithXSD(xmlString, xsdPath) {
 
 const ensurePatientExists = async (tenantCtx, patientId) => {
   const { rows } = await tenantCtx.db.query(
-    'SELECT id FROM patients WHERE tenant_id = $1 AND id = $2 LIMIT 1',
-    [tenantCtx.id, patientId]
+    'SELECT patient_id FROM patients WHERE patient_id = $1 LIMIT 1',
+    [patientId]
   );
   if (!rows.length) {
     throw new Error('Patient nicht gefunden oder nicht dem Mandanten zugeordnet.');
@@ -66,27 +66,34 @@ const ensurePatientExists = async (tenantCtx, patientId) => {
 
 const fetchPatientWithInsurance = async (tenantCtx, patientId) => {
   const { rows } = await tenantCtx.db.query(
-    `SELECT p.id,
-            p.vorname, p.nachname,
-            p.birthdate, p.geburtsdatum,
-            p.gender, p.geschlecht,
+    `SELECT p.patient_id,
+            p.patient_id AS id,
+            p.first_name,
+            p.first_name AS vorname,
+            p.last_name,
+            p.last_name AS nachname,
+            p.birth_date,
+            p.birth_date AS birthdate,
+            p.birth_date AS geburtsdatum,
             p.treated_sex,
-            p.ahv_nummer,
-            p.insurance_number, p.versichertennummer,
-            p.address, p.adresse, p.hausnummer, p.plz, p.ort,
+            p.ahv_number,
+            p.ahv_number AS ahv_nummer,
+            p.ahv_number AS insurance_number,
+            p.ahv_number AS versichertennummer,
+            jsonb_build_object('street', p.street, 'houseNumber', p.house_number, 'zip', p.postal_code, 'city', p.city) AS address,
             p.insurance_id,
             i.name AS insurance_name,
             i.ean AS insurance_ean,
             i.address AS insurance_address,
-            i.zip AS insurance_zip,
+            i.postal_code AS insurance_zip,
             i.city AS insurance_city,
             i.canton AS insurance_canton,
             i.bfs_code AS insurance_bfs_code
        FROM patients p
-       LEFT JOIN insurances i ON i.id = p.insurance_id AND i.tenant_id = p.tenant_id
-      WHERE p.tenant_id = $1 AND p.id = $2
+       LEFT JOIN insurances i ON i.insurance_id = p.insurance_id
+      WHERE p.patient_id = $1
       LIMIT 1`,
-    [tenantCtx.id, patientId]
+    [patientId]
   );
   return rows[0] || null;
 };
@@ -101,10 +108,10 @@ const parsePatientAddressFromRow = (row) => {
     } catch { /* ignore */ }
   }
   return {
-    street: row?.adresse || '',
-    houseNo: row?.hausnummer || '',
-    zip: row?.plz || '',
-    city: row?.ort || '',
+    street: '',
+    houseNo: '',
+    zip: '',
+    city: '',
     country: 'CH'
   };
 };
@@ -127,13 +134,12 @@ const hydrateClaimFromPatientRow = (claim, patientRow) => {
   claim.patient = claim.patient || {};
   const pat = claim.patient;
 
-  fillIfMissing(pat, 'first_name', patientRow.vorname || '');
-  fillIfMissing(pat, 'last_name', patientRow.nachname || '');
-  fillIfMissing(pat, 'birthdate', patientRow.birthdate || patientRow.geburtsdatum || '');
-  fillIfMissing(pat, 'ahv', patientRow.ahv_nummer || '');
-  fillIfMissing(pat, 'gender', patientRow.gender || patientRow.geschlecht || '');
+  fillIfMissing(pat, 'first_name', patientRow.first_name || patientRow.vorname || '');
+  fillIfMissing(pat, 'last_name', patientRow.last_name || patientRow.nachname || '');
+  fillIfMissing(pat, 'birthdate', patientRow.birth_date || patientRow.birthdate || patientRow.geburtsdatum || '');
+  fillIfMissing(pat, 'ahv', patientRow.ahv_number || patientRow.ahv_nummer || '');
   fillIfMissing(pat, 'sex', patientRow.treated_sex || '');
-  fillIfMissing(pat, 'insured_id', patientRow.insurance_number || patientRow.versichertennummer || '');
+  fillIfMissing(pat, 'insured_id', patientRow.ahv_number || patientRow.insurance_number || patientRow.versichertennummer || '');
 
   const rowAddr = parsePatientAddressFromRow(patientRow);
   pat.address = pat.address && typeof pat.address === 'object' ? pat.address : {};
@@ -289,7 +295,7 @@ function buildGeneralInvoice45XML(claim) {
       ${prov.zsr ? `<zsr>${esc(prov.zsr)}</zsr>` : ''}
       <name>${esc(prov.organization || '')}</name>
     </sender>
-    ${ins ? `<receiver><name>${esc(ins.name || 'Versicherer')}</name></receiver>` : `<receiver><name>${esc(rec.name || 'Empfänger')}</name></receiver>`}
+    ${ins ? `<receiver><name>${esc(ins.name || 'Versicherer')}</name></receiver>` : `<receiver><name>${esc(rec.name || 'Empfaenger')}</name></receiver>`}
     <date>${esc(isoDate(inv.created_at))}</date>
     <invoiceId>${esc(invoiceId)}</invoiceId>
     <currency>${esc(inv.currency || 'CHF')}</currency>
@@ -356,7 +362,7 @@ function buildGeneralInvoice50XML(claim) {
 
 const saveInvoiceRecord = async ({ tenantCtx, claim, userId, appDir, validateXML = false, xsdPath = '' }) => {
   if (!claim?.invoice?.id) {
-    throw new Error('Claim benötigt eine invoice.id');
+    throw new Error('Claim benoetigt eine invoice.id');
   }
 
   const tenantConfig = await getTenantBillingConfig(tenantCtx);
@@ -371,14 +377,6 @@ const saveInvoiceRecord = async ({ tenantCtx, claim, userId, appDir, validateXML
   const status = enrichedClaim.invoice.status || 'draft';
   const totalAmount = Number(enrichedClaim.totals?.total_chf ?? enrichedClaim.totals?.net_chf ?? 0) || 0;
   const currency = enrichedClaim.invoice.currency || 'CHF';
-  const doctorId =
-    enrichedClaim.invoice?.doctor_id ??
-    enrichedClaim.doctor?.id ??
-    enrichedClaim.provider?.id ??
-    null;
-  const createdByUserId = (userId !== null && userId !== undefined && Number.isFinite(Number(userId)))
-    ? Number(userId)
-    : null;
   const createdBy =
     enrichedClaim.invoice?.created_by ??
     enrichedClaim.created_by ??
@@ -389,7 +387,7 @@ const saveInvoiceRecord = async ({ tenantCtx, claim, userId, appDir, validateXML
 
   // Optional: XSD-Validierung erzwingen, um Schema-Fehler vor Persistenz zu vermeiden.
   if (validateXML) {
-    if (!xsdPath) throw new Error('XSD-Pfad für XML-Validierung fehlt.');
+    if (!xsdPath) throw new Error('XSD-Pfad fuer XML-Validierung fehlt.');
     const xml = buildGeneralInvoice50XML(enrichedClaim);
     const validation = await validateXMLWithXSD(xml, xsdPath);
     if (!validation.ok) {
@@ -403,38 +401,27 @@ const saveInvoiceRecord = async ({ tenantCtx, claim, userId, appDir, validateXML
 
     const upsertResult = await client.query(
       `INSERT INTO invoices (
-         tenant_id,
-         id,
+         invoice_id,
          patient_id,
-         doctor_id,
          status,
-         payload,
          created_by,
-         created_by_user_id,
-         total,
+         amount,
          currency
        )
-       VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7,$8,$9,$10)
-       ON CONFLICT (tenant_id, id)
+       VALUES ($1,$2,$3,$4,$5,$6)
+       ON CONFLICT (invoice_id)
        DO UPDATE SET
          patient_id = EXCLUDED.patient_id,
-         doctor_id = EXCLUDED.doctor_id,
          status = EXCLUDED.status,
-         payload = EXCLUDED.payload,
-         total = EXCLUDED.total,
+         amount = EXCLUDED.amount,
          currency = EXCLUDED.currency,
-         created_by = COALESCE(invoices.created_by, EXCLUDED.created_by),
-         created_by_user_id = COALESCE(invoices.created_by_user_id, EXCLUDED.created_by_user_id)
+         created_by = COALESCE(invoices.created_by, EXCLUDED.created_by)
        RETURNING *`,
       [
-        tenantCtx.id,
         invoiceId,
         patientId,
-        doctorId || null,
         status,
-        JSON.stringify(payload),
-        createdBy,
-        createdByUserId,
+        createdBy || userId || null,
         totalAmount,
         currency
       ]
@@ -457,7 +444,7 @@ const saveInvoiceRecord = async ({ tenantCtx, claim, userId, appDir, validateXML
       pdf = await renderInvoicePdf(enrichedClaim, tenantConfig, appDir);
       paths = await writePdfArtifacts(pdf.buffer, tenantCtx, patientId, invoiceId);
     } catch (err) {
-      console.error('❌ Fehler beim Rendern der PDF:', err?.message || err);
+      console.error('Fehler beim Rendern der PDF:', err?.message || err);
       throw new Error('PDF-Rendering fehlgeschlagen');
     }
 
@@ -473,28 +460,8 @@ const saveInvoiceRecord = async ({ tenantCtx, claim, userId, appDir, validateXML
       // Non-fatal: JSON/XML are convenience artifacts
     }
 
-    const updateResult = await client.query(
-      `UPDATE invoices
-          SET storage_path = $1,
-              tenant_storage_path = $2,
-              filesize = $3,
-              pdf_checksum = $4,
-              pdf_generated_at = now()
-        WHERE tenant_id = $5
-          AND id = $6
-        RETURNING *`,
-      [
-        paths.patientPath,
-        paths.tenantPath,
-        pdf.size || null,
-        pdf.checksum || null,
-        tenantCtx.id,
-        invoiceId
-      ]
-    );
-
     await client.query('COMMIT');
-    return updateResult.rows[0] || upsertResult.rows[0];
+    return upsertResult.rows[0];
   } catch (err) {
     await client.query('ROLLBACK');
     throw err;
@@ -504,26 +471,23 @@ const saveInvoiceRecord = async ({ tenantCtx, claim, userId, appDir, validateXML
 };
 
 const listInvoices = async (tenantCtx, { status = null, limit = 100 } = {}) => {
-  const params = [tenantCtx.id];
-  let sql = `SELECT tenant_id,
-                    id,
+  const params = [];
+  let sql = `SELECT invoice_id,
+                    invoice_id AS id,
                     patient_id,
-                    doctor_id,
                     status,
-                    storage_path,
-                    tenant_storage_path,
-                    filesize,
-                    pdf_checksum,
                     created_by,
-                    created_by_user_id,
                     created_at,
                     updated_at,
-                    pdf_generated_at,
-                    total,
+                    amount,
+                    amount AS total,
                     currency,
-                    payload
+                    medidata_ref,
+                    due_date,
+                    sent_at,
+                    paid_at
                FROM invoices
-              WHERE tenant_id = $1`;
+              WHERE 1=1`;
 
   if (status) {
     params.push(status);
@@ -542,28 +506,24 @@ const listInvoices = async (tenantCtx, { status = null, limit = 100 } = {}) => {
 
 const getInvoiceRecord = async (tenantCtx, invoiceId) => {
   const result = await tenantCtx.db.query(
-    `SELECT tenant_id,
-            id,
+    `SELECT invoice_id,
+            invoice_id AS id,
             patient_id,
-            doctor_id,
             status,
-            storage_path,
-            tenant_storage_path,
-            filesize,
-            pdf_checksum,
             created_by,
-            created_by_user_id,
             created_at,
             updated_at,
-            pdf_generated_at,
-            total,
+            amount,
+            amount AS total,
             currency,
-            payload
+            medidata_ref,
+            due_date,
+            sent_at,
+            paid_at
        FROM invoices
-      WHERE tenant_id = $1
-        AND id = $2
+      WHERE invoice_id = $1
       LIMIT 1`,
-    [tenantCtx.id, invoiceId]
+    [invoiceId]
   );
   return result.rows[0] || null;
 };

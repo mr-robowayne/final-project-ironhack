@@ -27,46 +27,41 @@ function resolveClientMeta(req) {
 
 async function createSessionToken({ tenantCtx, user, jwtSecret, req, expiresHours }) {
   if (!tenantCtx?.db) throw new Error('Tenant context mit Datenbankverbindung fehlt.');
-  if (!user?.id) throw new Error('Benutzer-ID fehlt für Session-Erzeugung.');
+  if (!user?.user_id && !user?.id) throw new Error('Benutzer-ID fehlt fuer Session-Erzeugung.');
   if (!jwtSecret) throw new Error('JWT_SECRET fehlt.');
 
   const ttlHours = Number.isFinite(Number(expiresHours)) ? Number(expiresHours) : resolveJwtExpiresHours();
   const sessionId = crypto.randomUUID();
+  const userId = user.user_id || user.id;
+
+  // Resolve role: prefer user.role (display name from JOIN), fall back to rolle for legacy compat
+  const roleName = user.role || user.rolle || null;
+
   const tokenPayload = {
-    id: user.id,
+    id: userId,
     tenant: tenantCtx.id,
-    role: user.role || user.rolle,
+    role: roleName,
     sid: sessionId,
   };
   const token = jwt.sign(tokenPayload, jwtSecret, { expiresIn: `${ttlHours}h` });
-  const tokenHash = hashToken(token);
-  const issuedAt = new Date();
-  const expiresAt = new Date(issuedAt.getTime() + ttlHours * 60 * 60 * 1000);
+  const expiresAt = new Date(Date.now() + ttlHours * 60 * 60 * 1000);
   const { ip, userAgent } = resolveClientMeta(req);
 
   await tenantCtx.db.query(
     `INSERT INTO user_sessions (
        session_id,
-       tenant_id,
        user_id,
-       token_hash,
-       issued_at,
        expires_at,
        user_agent,
-       ip_address,
-       metadata
+       ip_address
      )
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+     VALUES ($1,$2,$3,$4,$5)`,
     [
       sessionId,
-      tenantCtx.id,
-      Number(user.id),
-      tokenHash,
-      issuedAt,
+      userId,
       expiresAt,
       userAgent,
       ip,
-      { role: user.role || user.rolle || null },
     ]
   );
 
@@ -82,33 +77,23 @@ async function validateSessionToken({ tenantCtx, payload, token }) {
   if (!tenantCtx?.db) return { ok: false, reason: 'TENANT_DB_MISSING' };
   if (!payload?.sid) return { ok: false, reason: 'SESSION_ID_MISSING' };
   const sessionId = String(payload.sid);
-  const tokenHash = hashToken(token);
 
   const { rows } = await tenantCtx.db.query(
     `SELECT session_id,
-            tenant_id,
             user_id,
-            token_hash,
             expires_at,
-            revoked_at
+            invalidated_at
        FROM user_sessions
       WHERE session_id = $1
-        AND tenant_id = $2
-        AND user_id = $3
+        AND user_id = $2
       LIMIT 1`,
-    [sessionId, tenantCtx.id, Number(payload.id)]
+    [sessionId, payload.id]
   );
 
   const row = rows[0];
   if (!row) return { ok: false, reason: 'SESSION_NOT_FOUND' };
-  if (row.revoked_at) return { ok: false, reason: 'SESSION_REVOKED' };
+  if (row.invalidated_at) return { ok: false, reason: 'SESSION_REVOKED' };
   if (new Date(row.expires_at).getTime() <= Date.now()) return { ok: false, reason: 'SESSION_EXPIRED' };
-  if (row.token_hash !== tokenHash) return { ok: false, reason: 'TOKEN_HASH_MISMATCH' };
-
-  await tenantCtx.db.query(
-    'UPDATE user_sessions SET last_seen_at = now() WHERE session_id = $1',
-    [sessionId]
-  );
 
   return { ok: true, session: row };
 }
@@ -117,10 +102,9 @@ async function revokeSessionById({ tenantCtx, sessionId }) {
   if (!tenantCtx?.db || !sessionId) return;
   await tenantCtx.db.query(
     `UPDATE user_sessions
-        SET revoked_at = COALESCE(revoked_at, now())
-      WHERE tenant_id = $1
-        AND session_id = $2`,
-    [tenantCtx.id, String(sessionId)]
+        SET invalidated_at = COALESCE(invalidated_at, now())
+      WHERE session_id = $1`,
+    [String(sessionId)]
   );
 }
 

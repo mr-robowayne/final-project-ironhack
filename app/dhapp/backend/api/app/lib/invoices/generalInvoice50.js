@@ -41,7 +41,7 @@ const normalizeGenderXsd = (value) => {
   const v = String(value || '').trim().toLowerCase();
   if (!v) return null;
   if (['w', 'f', 'female', 'weiblich'].includes(v)) return 'female';
-  if (['m', 'male', 'männlich'].includes(v)) return 'male';
+  if (['m', 'male', 'maennlich'].includes(v)) return 'male';
   if (['d', 'divers', 'diverse', 'other'].includes(v)) return 'diverse';
   if (['frau'].includes(v)) return 'female';
   if (['mann'].includes(v)) return 'male';
@@ -52,7 +52,7 @@ const normalizeSexXsd = (value) => {
   const v = String(value || '').trim().toLowerCase();
   if (!v) return null;
   if (['w', 'f', 'female', 'weiblich'].includes(v)) return 'female';
-  if (['m', 'male', 'männlich'].includes(v)) return 'male';
+  if (['m', 'male', 'maennlich'].includes(v)) return 'male';
   return null;
 };
 
@@ -67,7 +67,7 @@ const assertNonEmpty = (label, value) => {
 
 const parseZipCityFromOneLine = (line) => {
   const s = String(line || '').replace(/\s+/g, ' ').trim();
-  const m = s.match(/\b(\d{4})\s+([A-Za-zÀ-ÿ' -]{2,})\b/);
+  const m = s.match(/\b(\d{4})\s+([A-Za-z\u00C0-\u00FF' -]{2,})\b/);
   if (!m) return { zip: '', city: '' };
   return { zip: m[1], city: String(m[2]).trim() };
 };
@@ -164,14 +164,14 @@ function buildGeneralInvoice50RequestXML(claim, opts = {}) {
     email: prov.contact?.email || '',
   });
 
-  const patientBirthdate = assertNonEmpty('patient.birthdate', pat.birthdate);
-  const patientGender = normalizeGenderXsd(pat.gender || pat.geschlecht);
-  if (!patientGender) throw new Error('patient.gender/geschlecht fehlt oder ungültig (male|female|diverse)');
+  const patientBirthdate = assertNonEmpty('patient.birthdate', pat.birthdate || pat.birth_date);
+  const patientGender = normalizeGenderXsd(pat.gender || pat.sex);
+  if (!patientGender) throw new Error('patient.gender/sex fehlt oder ungueltig (male|female|diverse)');
   const patientSex = normalizeSexXsd(pat.sex || pat.treated_sex || pat.billing_sex || (patientGender === 'male' || patientGender === 'female' ? patientGender : null));
   if (!patientSex) throw new Error('patient.sex (male|female) erforderlich (bei diverse: behandeltes Geschlecht setzen)');
-  const ahvDigits = digitsOnly(pat.ahv || pat.ahv_nummer || '');
+  const ahvDigits = digitsOnly(pat.ahv || pat.ahv_number || pat.ahv_nummer || '');
   if (!ahvDigits) throw new Error('patient.ahv fehlt (AHV/SSN erforderlich)');
-  if (!/^(\d{4,10}|756\d{10}|438\d{10})$/.test(ahvDigits)) throw new Error('patient.ahv ungültig (SSN/AHV Format)');
+  if (!/^(\d{4,10}|756\d{10}|438\d{10})$/.test(ahvDigits)) throw new Error('patient.ahv ungueltig (SSN/AHV Format)');
 
   const patientPostal = buildPostal({
     street: pat.address?.street || '',
@@ -215,13 +215,13 @@ function buildGeneralInvoice50RequestXML(claim, opts = {}) {
   const invoiceId = assertNonEmpty('invoice.id', inv.id);
   const createdAt = inv.created_at || Date.now();
   const requestTimestamp = epochSeconds(createdAt);
-  if (!requestTimestamp) throw new Error('invoice.created_at ungültig');
+  if (!requestTimestamp) throw new Error('invoice.created_at ungueltig');
 
   const payloadCredit = `<invoice:credit request_timestamp="${requestTimestamp}" request_date="${xmlEscape(toISODateTimeMidnight(createdAt))}" request_id="${xmlEscape(invoiceId)}"/>`;
   const payloadInvoice = `<invoice:invoice request_timestamp="${requestTimestamp}" request_date="${xmlEscape(toISODateTimeMidnight(createdAt))}" request_id="${xmlEscape(invoiceId)}"/>`;
 
   const iban = normalizeIban(prov.qrIban || prov.iban || '');
-  if (!iban || !/^(LI|CH)[0-9]{7}[0-9A-Z]{12}$/.test(iban)) throw new Error('provider.iban (CH/LI) fehlt oder ungültig (für QR erforderlich)');
+  if (!iban || !/^(LI|CH)[0-9]{7}[0-9A-Z]{12}$/.test(iban)) throw new Error('provider.iban (CH/LI) fehlt oder ungueltig (fuer QR erforderlich)');
   const payRefType = String(inv.payment_ref?.type || 'NON').toUpperCase();
   const payRefValue = String(inv.payment_ref?.value || '').replace(/\s+/g, '');
   const esrCreditor = `<invoice:creditor>${providerCompany}</invoice:creditor>`;
@@ -238,7 +238,7 @@ function buildGeneralInvoice50RequestXML(claim, opts = {}) {
         ${esrCreditor}
       </invoice:esrQRRed>`;
     }
-    // NON → use esrQRRed without reference_number (optional)
+    // NON -> use esrQRRed without reference_number (optional)
     return `<invoice:esrQRRed iban="${xmlEscape(iban)}" payment_period="P30D">
       ${esrCreditor}
     </invoice:esrQRRed>`;
@@ -271,13 +271,13 @@ function buildGeneralInvoice50RequestXML(claim, opts = {}) {
 
   const debitor = (() => {
     if (billingMode === 'TP') {
-      if (!ins) throw new Error('insurer erforderlich für TP');
+      if (!ins) throw new Error('insurer erforderlich fuer TP');
       const g = assertNonEmpty('insurer.gln/ean', insurerGln);
       const postal = buildPostal({ street: '', houseNo: '', zip: insurerZip, city: insurerCity, country: 'CH' });
       const company = buildCompany({ companyname: insurerName, postal });
       return `<invoice:debitor gln="${xmlEscape(g)}">${company}</invoice:debitor>`;
     }
-    // TG: private debitor without GLN → configured placeholder
+    // TG: private debitor without GLN -> configured placeholder
     const debGln = assertNonEmpty('billing.debitor_person_gln', defaults.debitor_person_gln);
     return `<invoice:debitor gln="${xmlEscape(debGln)}">${patientPerson}</invoice:debitor>`;
   })();
@@ -303,7 +303,7 @@ function buildGeneralInvoice50RequestXML(claim, opts = {}) {
 
   const tiers = (() => {
     if (billingMode === 'TP') {
-      if (!ins) throw new Error('insurer erforderlich für TP');
+      if (!ins) throw new Error('insurer erforderlich fuer TP');
       return `<invoice:tiers_payant allowModification="${bool01(false)}">
         ${billers}
         ${debitor}
@@ -356,7 +356,7 @@ function buildGeneralInvoice50RequestXML(claim, opts = {}) {
       const name = String(s.text || s.title || s.name || '').trim() || String(s.code || '').trim();
       if (!name) throw new Error(`services[${idx}].text/name fehlt`);
       const dateBegin = toISODateTimeWithOptionalTime(s.date || inv.created_at, s.time || s.service_time || s.time_of_day || s.start_time);
-      if (!dateBegin) throw new Error(`services[${idx}].date ungültig`);
+      if (!dateBegin) throw new Error(`services[${idx}].date ungueltig`);
       return `<invoice:service_ex record_id="${idx + 1}"
         tariff_type="${xmlEscape(tariffType)}"
         code="${xmlEscape(String(s.code || ''))}"
@@ -431,4 +431,3 @@ function buildGeneralInvoice50RequestXML(claim, opts = {}) {
 module.exports = {
   buildGeneralInvoice50RequestXML,
 };
-

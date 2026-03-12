@@ -32,8 +32,13 @@ function renderSickNoteHtml(note, tenantConfig) {
   const end = note?.open_end ? 'bis auf Weiteres' : fmtDate(note?.end_date);
   const degree = `${Number(note?.degree_percent ?? 100)}%`;
 
+  // Build patient display name from new schema fields with backward compat
+  const patientDisplayName = patient?.name || patient?.display_name || `${patient?.first_name || patient?.vorname || ''} ${patient?.last_name || patient?.nachname || ''}`.trim();
+  const patientBirthdate = patient?.birth_date || patient?.birthdate || patient?.geburtsdatum;
+  const patientInsuranceNumber = patient?.ahv_number || patient?.insurance_number || patient?.versichertennummer;
+
   const receiverBlock = receiver?.type && receiver?.type !== 'PATIENT'
-    ? `<div class="small">Empfänger: ${esc(receiver?.name || receiver?.type)}${receiver?.address ? '<br/>' + esc(receiver.address).replace(/\n/g,'<br/>') : ''}</div>`
+    ? `<div class="small">Empfaenger: ${esc(receiver?.name || receiver?.type)}${receiver?.address ? '<br/>' + esc(receiver.address).replace(/\n/g,'<br/>') : ''}</div>`
     : '';
 
   const diagnosisLine = note?.diagnosis_short ? `<div>Hinweis: ${esc(note.diagnosis_short)}</div>` : '';
@@ -44,7 +49,7 @@ function renderSickNoteHtml(note, tenantConfig) {
     <head>
       <meta charset="utf-8" />
       <meta name="viewport" content="width=device-width, initial-scale=1" />
-      <title>Arbeitsunfähigkeitszeugnis</title>
+      <title>Arbeitsunfaehigkeitszeugnis</title>
       <style>${style}</style>
     </head>
     <body>
@@ -58,24 +63,24 @@ function renderSickNoteHtml(note, tenantConfig) {
         </div>
         <div class="small">${esc(city)}, ${issuedAt}</div>
       </div>
-      <div class="title">Arbeitsunfähigkeitszeugnis</div>
+      <div class="title">Arbeitsunfaehigkeitszeugnis</div>
       <div class="section">
-        <div><strong>Patient/in:</strong> ${esc([patient?.name || `${patient?.vorname||''} ${patient?.nachname||''}`.trim(), patient?.birthdate ? `geb. ${fmtDate(patient.birthdate)}` : ''].filter(Boolean).join(', '))}</div>
-        ${patient?.insurance_number ? `<div class="small">Versichertennummer: ${esc(patient.insurance_number)}</div>` : ''}
+        <div><strong>Patient/in:</strong> ${esc([patientDisplayName, patientBirthdate ? `geb. ${fmtDate(patientBirthdate)}` : ''].filter(Boolean).join(', '))}</div>
+        ${patientInsuranceNumber ? `<div class="small">Versichertennummer: ${esc(patientInsuranceNumber)}</div>` : ''}
       </div>
       ${receiverBlock}
       <div class="section">
-        Hiermit wird bestätigt, dass ${patient?.gender==='weiblich'?'Frau':'Herr'} ${esc(patient?.name || `${patient?.vorname||''} ${patient?.nachname||''}`.trim())}
-        seit ${esc(start)} ${end ? `bis voraussichtlich ${esc(end)} ` : ''}zu ${esc(degree)} arbeitsunfähig ist.
+        Hiermit wird bestaetigt, dass ${esc(patientDisplayName)}
+        seit ${esc(start)} ${end ? `bis voraussichtlich ${esc(end)} ` : ''}zu ${esc(degree)} arbeitsunfaehig ist.
       </div>
-      ${note?.open_end ? '<div class="section">Die Arbeitsunfähigkeit dauert bis auf Weiteres an.</div>' : ''}
+      ${note?.open_end ? '<div class="section">Die Arbeitsunfaehigkeit dauert bis auf Weiteres an.</div>' : ''}
       ${diagnosisLine}
       ${remarkLine}
       <div class="signature">
         <div>${esc(city)}, ${issuedAt}</div>
         <div style="height: 48px"></div>
         <div>____________________________</div>
-        <div>${esc(clinic?.doctor?.name || clinic?.contact?.doctor || clinic?.name || 'Behandelnde/r Arzt/Ärztin')}</div>
+        <div>${esc(clinic?.doctor?.name || clinic?.contact?.doctor || clinic?.name || 'Behandelnde/r Arzt/Aerztin')}</div>
       </div>
     </body>
   </html>`;
@@ -98,4 +103,3 @@ module.exports = {
   renderSickNoteHtml,
   renderSickNotePdf,
 };
-

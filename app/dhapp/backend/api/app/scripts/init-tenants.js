@@ -59,6 +59,11 @@ async function bootstrapTenant(tenantId) {
 }
 
 async function main() {
+  if (process.env.SKIP_TENANT_INIT === 'true') {
+    log('SKIP_TENANT_INIT=true — skipping tenant bootstrap (Flyway manages schema)');
+    process.exit(0);
+  }
+
   tenantManager.reloadTenants();
 
   const configuredTenants = tenantManager.listTenants().map((t) => t.id);

@@ -546,70 +546,8 @@ async function applyBaseSchemaIfMissing(pool) {
 }
 
 async function runMigrationsForTenant(tenantId, pool) {
-  const migrations = loadMigrationFiles();
-  // Skip fragile legacy migration(s) that conflict with aligned schema
-  const SKIP_MIGRATIONS = new Set([
-    '20250211-001_create_tenant_settings.sql',
-  ]);
-  if (SKIP_LEGACY_COMPAT_MIGRATIONS) {
-    for (const legacyId of [
-      '20250210-000_compat_users_rolle.sql',
-      '20250210-001_compat_users_tenant_id.sql',
-      '20250210-002_compat_users_tenant_default.sql',
-      '20250210-003_compat_users_name_nullable.sql',
-      '20250210-004_compat_users_role_nullable.sql',
-      '20250210-005_compat_users_insert_defaults.sql',
-      '20250210-006_compat_view_patienten.sql',
-      '20250210-007_force_drop_not_null_users.sql',
-      '20250210-008_preseed_users_min.sql',
-      '20250210-009_compat_patients_tenant_insert.sql',
-    ]) {
-      SKIP_MIGRATIONS.add(legacyId);
-    }
-  }
-  // Never run demo user seed automatically in hardened/prod setups.
-  if (isProd || !MIGRATION_SEED_DEMO_DATA) {
-    SKIP_MIGRATIONS.add('20250210-008_preseed_users_min.sql');
-  }
-  if (!migrations.length) return;
-
-  const client = await pool.connect();
-  try {
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS ${MIGRATION_TABLE} (
-        id TEXT PRIMARY KEY,
-        applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
-      )
-    `);
-    const appliedRows = await client.query(`SELECT id FROM ${MIGRATION_TABLE}`);
-    const appliedSet = new Set(appliedRows.rows.map((row) => row.id));
-
-    for (const migration of migrations) {
-      if (SKIP_MIGRATIONS.has(migration.id)) {
-        console.warn(`[migrations] Skipping ${migration.id} for tenant ${tenantId}`);
-        // Mark as applied so we don't retry later
-        await client.query(`INSERT INTO ${MIGRATION_TABLE} (id) VALUES ($1) ON CONFLICT DO NOTHING`, [migration.id]);
-        continue;
-      }
-      if (appliedSet.has(migration.id)) continue;
-      const sql = fs.readFileSync(migration.path, 'utf8');
-      await client.query('BEGIN');
-      try {
-        const envValue = isProd ? 'production' : 'development';
-        const seedValue = MIGRATION_SEED_DEMO_DATA ? 'on' : 'off';
-        await client.query(`SET LOCAL app.env = '${envValue}'`);
-        await client.query(`SET LOCAL app.seed_demo_data = '${seedValue}'`);
-        await client.query(sql);
-        await client.query(`INSERT INTO ${MIGRATION_TABLE} (id) VALUES ($1)`, [migration.id]);
-        await client.query('COMMIT');
-      } catch (err) {
-        await client.query('ROLLBACK');
-        throw new Error(`Migration ${migration.id} fehlgeschlagen für Mandant ${tenantId}: ${err.message}`);
-      }
-    }
-  } finally {
-    client.release();
-  }
+  console.log('[migrations] Skipped — schema managed by Flyway');
+  return;
 }
 
 function registerShutdownHook() {
@@ -643,9 +581,11 @@ async function ensureTenantReady(tenantId) {
       poolCache.set(id, pool);
       registerShutdownHook();
     }
-    await applyBaseSchemaIfMissing(pool);
-    await runMigrationsForTenant(id, pool);
-    await ensureTenantScopedTables(id, pool);
+    // Schema is managed by Flyway — skip legacy base schema, migrations, and scoped tables.
+    console.log('[migrations] Skipped — schema managed by Flyway');
+    // await applyBaseSchemaIfMissing(pool);
+    // await runMigrationsForTenant(id, pool);
+    // await ensureTenantScopedTables(id, pool);
     const registry = await ensureTenantRegistryEntry(tenant, paths, pool);
     const schemaName = sanitizeSchemaName(registry?.schema_name || tenant.schemaName, id);
     await syncTenantAuthUsers(id, schemaName, pool);

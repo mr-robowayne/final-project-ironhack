@@ -1,9 +1,9 @@
-
 # OS & IDE
 .DS_Store
 .idea/
 .vscode/
 *.swp
+*~
 
 # Terraform
 *.tfvars
@@ -13,8 +13,10 @@
 *.tfplan
 .terraform.lock.hcl
 
-# Ansible Vault (unverschlüsselt)
-**/vault.yml
+# Ansible Vault — verschlüsselte vault.yml MUSS im Repo sein!
+# Nur unverschlüsselte Backups ignorieren:
+**/vault.yml.bak
+**/vault.yml.unencrypted
 
 # Node
 **/node_modules/
@@ -22,3 +24,7 @@
 # Docker / Secrets
 *.env
 .env.*
+
+# DB local config
+db/flyway.conf
+
