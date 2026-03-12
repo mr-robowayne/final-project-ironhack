@@ -5,4 +5,20 @@
 .vscode/
 *.swp
 
+# Terraform
 *.tfvars
+**/.terraform/
+*.tfstate
+*.tfstate.backup
+*.tfplan
+.terraform.lock.hcl
+
+# Ansible Vault (unverschlüsselt)
+**/vault.yml
+
+# Node
+**/node_modules/
+
+# Docker / Secrets
+*.env
+.env.*
