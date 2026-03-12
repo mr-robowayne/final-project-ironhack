@@ -1,0 +1,5 @@
+# xlsx (SheetJS) — fix versions not available on public npm registry
+# SheetJS moved to commercial model, newer versions removed from npmjs.com
+# Risk accepted: xlsx is used server-side only, not exposed to untrusted input
+CVE-2023-30533
+CVE-2024-22363
