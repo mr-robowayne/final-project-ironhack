@@ -125,10 +125,12 @@
 - name: Warten bis backend-api antwortet
   ansible.builtin.uri:
     url: "http://127.0.0.1:{{ ports.backend_api }}/api/health"
+    headers:
+      x-forwarded-proto: "https"
     status_code: 200
-    timeout: 5
+    timeout: 10
   register: health_check
-  retries: 12
+  retries: 18
   delay: 5
   until: health_check.status == 200
 
