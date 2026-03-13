@@ -20,11 +20,18 @@ output "cloudwatch_alarm_arns" {
       alb_target_4xx_high         = aws_cloudwatch_metric_alarm.alb_target_4xx_high.arn
       alb_response_time_high      = aws_cloudwatch_metric_alarm.alb_response_time_high.arn
       alb_unhealthy_hosts         = aws_cloudwatch_metric_alarm.alb_unhealthy_hosts.arn
+      rds_read_latency_high       = aws_cloudwatch_metric_alarm.rds_read_latency_high.arn
+      rds_write_latency_high      = aws_cloudwatch_metric_alarm.rds_write_latency_high.arn
       monitoring_cpu_high         = aws_cloudwatch_metric_alarm.monitoring_cpu_high.arn
       monitoring_status_failed    = aws_cloudwatch_metric_alarm.monitoring_status_failed.arn
     },
     { for id, alarm in aws_cloudwatch_metric_alarm.backend_cpu_high : "backend_${id}_cpu_high" => alarm.arn },
     { for id, alarm in aws_cloudwatch_metric_alarm.backend_status_failed : "backend_${id}_status_failed" => alarm.arn },
-    { for id, alarm in aws_cloudwatch_metric_alarm.backend_ebs_write_ops_high : "backend_${id}_ebs_write_ops_high" => alarm.arn }
+    { for id, alarm in aws_cloudwatch_metric_alarm.backend_ebs_write_ops_high : "backend_${id}_ebs_write_ops_high" => alarm.arn },
+    { for id, alarm in aws_cloudwatch_metric_alarm.backend_memory_high : "backend_${id}_memory_high" => alarm.arn },
+    { for id, alarm in aws_cloudwatch_metric_alarm.backend_disk_high : "backend_${id}_disk_high" => alarm.arn },
+    var.enable_log_based_alarms && var.backend_api_log_group_name != "" ? {
+      backend_error_rate_high = aws_cloudwatch_metric_alarm.backend_error_rate_high[0].arn
+    } : {}
   )
 }

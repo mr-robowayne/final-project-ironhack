@@ -1,0 +1,9 @@
+---
+# AWS region for SSM parameter lookup
+aws_region: eu-central-2
+
+# SSM Parameter Store path containing the CloudWatch Agent JSON config
+cloudwatch_agent_ssm_config: "/patientsync/production/cloudwatch-agent/config"
+
+# CloudWatch Agent package URL (Ubuntu amd64)
+cloudwatch_agent_deb_url: "https://amazoncloudwatch-agent.s3.amazonaws.com/ubuntu/amd64/latest/amazon-cloudwatch-agent.deb"

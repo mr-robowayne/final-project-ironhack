@@ -360,3 +360,124 @@ resource "aws_cloudwatch_metric_alarm" "monitoring_status_failed" {
   }
   tags = var.tags
 }
+
+# ─── RDS Read/Write Latency Alarms ───
+
+resource "aws_cloudwatch_metric_alarm" "rds_read_latency_high" {
+  alarm_name          = "${var.name_prefix}-rds-read-latency-high"
+  alarm_description   = "RDS read latency above ${var.rds_read_latency_threshold * 1000}ms."
+  namespace           = "AWS/RDS"
+  metric_name         = "ReadLatency"
+  statistic           = "Average"
+  period              = 300
+  evaluation_periods  = 3
+  threshold           = var.rds_read_latency_threshold
+  comparison_operator = "GreaterThanThreshold"
+  treat_missing_data  = "notBreaching"
+  alarm_actions       = [aws_sns_topic.alerts.arn]
+  ok_actions          = [aws_sns_topic.alerts.arn]
+  dimensions = {
+    DBInstanceIdentifier = var.rds_instance_identifier
+  }
+  tags = var.tags
+}
+
+resource "aws_cloudwatch_metric_alarm" "rds_write_latency_high" {
+  alarm_name          = "${var.name_prefix}-rds-write-latency-high"
+  alarm_description   = "RDS write latency above ${var.rds_write_latency_threshold * 1000}ms."
+  namespace           = "AWS/RDS"
+  metric_name         = "WriteLatency"
+  statistic           = "Average"
+  period              = 300
+  evaluation_periods  = 3
+  threshold           = var.rds_write_latency_threshold
+  comparison_operator = "GreaterThanThreshold"
+  treat_missing_data  = "notBreaching"
+  alarm_actions       = [aws_sns_topic.alerts.arn]
+  ok_actions          = [aws_sns_topic.alerts.arn]
+  dimensions = {
+    DBInstanceIdentifier = var.rds_instance_identifier
+  }
+  tags = var.tags
+}
+
+# ─── EC2 Memory & Disk Alarms (CloudWatch Agent custom metrics) ───
+
+resource "aws_cloudwatch_metric_alarm" "backend_memory_high" {
+  for_each = var.enable_cloudwatch_agent_alarms ? toset(var.ec2_instance_ids) : toset([])
+
+  alarm_name          = "${var.name_prefix}-backend-${each.value}-memory-high"
+  alarm_description   = "Backend EC2 memory usage above ${var.ec2_memory_threshold}%."
+  namespace           = var.custom_metrics_namespace
+  metric_name         = "mem_used_percent"
+  statistic           = "Average"
+  period              = 300
+  evaluation_periods  = 2
+  threshold           = var.ec2_memory_threshold
+  comparison_operator = "GreaterThanThreshold"
+  treat_missing_data  = "notBreaching"
+  alarm_actions       = [aws_sns_topic.alerts.arn]
+  ok_actions          = [aws_sns_topic.alerts.arn]
+  dimensions = {
+    InstanceId = each.value
+  }
+  tags = var.tags
+}
+
+resource "aws_cloudwatch_metric_alarm" "backend_disk_high" {
+  for_each = var.enable_cloudwatch_agent_alarms ? toset(var.ec2_instance_ids) : toset([])
+
+  alarm_name          = "${var.name_prefix}-backend-${each.value}-disk-high"
+  alarm_description   = "Backend EC2 disk usage above ${var.ec2_disk_threshold}%."
+  namespace           = var.custom_metrics_namespace
+  metric_name         = "disk_used_percent"
+  statistic           = "Average"
+  period              = 300
+  evaluation_periods  = 2
+  threshold           = var.ec2_disk_threshold
+  comparison_operator = "GreaterThanThreshold"
+  treat_missing_data  = "notBreaching"
+  alarm_actions       = [aws_sns_topic.alerts.arn]
+  ok_actions          = [aws_sns_topic.alerts.arn]
+  dimensions = {
+    InstanceId = each.value
+    path       = "/"
+    fstype     = "ext4"
+  }
+  tags = var.tags
+}
+
+# ─── Log-Based Metric Filters & Alarms ───
+
+resource "aws_cloudwatch_log_metric_filter" "backend_error_rate" {
+  count = var.enable_log_based_alarms && var.backend_api_log_group_name != "" ? 1 : 0
+
+  name           = "${var.name_prefix}-backend-error-rate"
+  log_group_name = var.backend_api_log_group_name
+  pattern        = "ERROR"
+
+  metric_transformation {
+    name          = "BackendErrorCount"
+    namespace     = var.custom_metrics_namespace
+    value         = "1"
+    default_value = "0"
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "backend_error_rate_high" {
+  count = var.enable_log_based_alarms && var.backend_api_log_group_name != "" ? 1 : 0
+
+  alarm_name          = "${var.name_prefix}-backend-error-rate-high"
+  alarm_description   = "Backend API error rate above 10 errors in 5 minutes."
+  namespace           = var.custom_metrics_namespace
+  metric_name         = "BackendErrorCount"
+  statistic           = "Sum"
+  period              = 300
+  evaluation_periods  = 1
+  threshold           = 10
+  comparison_operator = "GreaterThanThreshold"
+  treat_missing_data  = "notBreaching"
+  alarm_actions       = [aws_sns_topic.alerts.arn]
+  ok_actions          = [aws_sns_topic.alerts.arn]
+  tags                = var.tags
+}

@@ -52,7 +52,7 @@
 
     - name: Healthcheck nach Deploy
       ansible.builtin.uri:
-        url: "http://127.0.0.1:{{ ports.nginx }}/api/health"
+        url: "http://127.0.0.1:{{ ports.nginx }}/health"
         status_code: 200
         timeout: 10
       retries: 12

@@ -27,6 +27,13 @@ resource "aws_iam_role_policy_attachment" "ssm_core" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
 
+resource "aws_iam_role_policy_attachment" "cloudwatch_agent" {
+  count = var.enable_cloudwatch_agent ? 1 : 0
+
+  role       = aws_iam_role.monitoring.name
+  policy_arn = "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
+}
+
 resource "aws_iam_role_policy" "ec2_discovery" {
   name = "${var.name_prefix}-monitoring-ec2-discovery"
   role = aws_iam_role.monitoring.id

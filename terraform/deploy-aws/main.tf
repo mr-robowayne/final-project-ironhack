@@ -25,25 +25,25 @@ locals {
 module "backend" {
   source = "../modules/backend"
 
-  project_name           = var.project_name
-  environment            = var.environment
-  aws_region             = var.aws_region
-  backend_region         = var.backend_region
-  state_bucket_name      = var.state_bucket_name
-  lock_table_name        = var.lock_table_name
-  role_arn               = var.role_arn
-  state_key              = var.state_key
-  secret_name            = var.secret_name
-  secret_kms_key_id      = var.secret_kms_key_id
-  create_kms_key         = var.create_kms_key
-  ssm_document_name      = var.ssm_document_name
-  ssm_document_content   = var.ssm_document_content
-  parameter_prefix       = var.parameter_prefix
+  project_name                      = var.project_name
+  environment                       = var.environment
+  aws_region                        = var.aws_region
+  backend_region                    = var.backend_region
+  state_bucket_name                 = var.state_bucket_name
+  lock_table_name                   = var.lock_table_name
+  role_arn                          = var.role_arn
+  state_key                         = var.state_key
+  secret_name                       = var.secret_name
+  secret_kms_key_id                 = var.secret_kms_key_id
+  create_kms_key                    = var.create_kms_key
+  ssm_document_name                 = var.ssm_document_name
+  ssm_document_content              = var.ssm_document_content
+  parameter_prefix                  = var.parameter_prefix
   additional_parameter_store_values = local.frontend_parameter_store_values
-  create_secret_manager  = var.create_secret_manager
-  create_ssm             = var.create_ssm
-  create_parameter_store = var.create_parameter_store
-  create_cloudtrail      = var.create_cloudtrail
+  create_secret_manager             = var.create_secret_manager
+  create_ssm                        = var.create_ssm
+  create_parameter_store            = var.create_parameter_store
+  create_cloudtrail                 = var.create_cloudtrail
 
   cloudtrail_name                            = var.cloudtrail_name
   cloudtrail_s3_bucket_name                  = var.cloudtrail_s3_bucket_name

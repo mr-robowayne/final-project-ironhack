@@ -1,0 +1,29 @@
+---
+# Playbook: Install and configure the AWS CloudWatch Agent on backend EC2 instances.
+#
+# Usage:
+#   ansible-playbook playbooks/install-cloudwatch-agent.yml --ask-vault-pass
+#
+# This playbook:
+#   1. Installs the CloudWatch Agent .deb package (if not already installed)
+#   2. Fetches the agent config from SSM Parameter Store
+#   3. Starts the agent and enables it on boot
+#
+# Prerequisites:
+#   - deploy-monitoring Terraform stack applied with enable_cloudwatch_agent = true
+#   - Backend EC2 IAM role has the CloudWatch Agent policy attached
+#   - SSM Parameter Store contains the agent config at /patientsync/production/cloudwatch-agent/config
+#
+# Rolling deployment: one host at a time to avoid service disruption.
+
+- name: Install CloudWatch Agent on backend instances
+  hosts: patientsync_backend
+  become: true
+  serial: 1
+  gather_facts: true
+
+  roles:
+    - role: cloudwatch-agent
+      vars:
+        aws_region: eu-central-2
+        cloudwatch_agent_ssm_config: "/patientsync/production/cloudwatch-agent/config"

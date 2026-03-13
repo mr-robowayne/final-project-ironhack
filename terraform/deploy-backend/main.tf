@@ -104,10 +104,10 @@ module "compute" {
   ami_name_pattern           = var.private_instance_ami_name_pattern
   root_volume_size           = var.private_instance_root_volume_size
   root_volume_type           = var.private_instance_root_volume_type
-  enable_detailed_monitoring  = var.private_instance_enable_detailed_monitoring
-  enable_ssm_profile          = var.private_instance_enable_ssm_profile
-  backend_secret_arns         = var.rds_ssm_parameter_prefix != null ? [data.aws_ssm_parameter.rds_secret_arn[0].value] : []
-  backend_kms_key_arns        = concat(
+  enable_detailed_monitoring = var.private_instance_enable_detailed_monitoring
+  enable_ssm_profile         = var.private_instance_enable_ssm_profile
+  backend_secret_arns        = var.rds_ssm_parameter_prefix != null ? [data.aws_ssm_parameter.rds_secret_arn[0].value] : []
+  backend_kms_key_arns = concat(
     var.rds_kms_alias_name != null ? [data.aws_kms_alias.rds[0].target_key_arn] : [],
     var.documents_ssm_parameter_prefix != null ? [data.aws_ssm_parameter.documents_kms_key_arn[0].value] : []
   )

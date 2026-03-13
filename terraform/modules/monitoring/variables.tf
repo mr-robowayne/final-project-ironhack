@@ -46,6 +46,12 @@ variable "allow_https_egress_to_internet" {
   default     = true
 }
 
+variable "enable_cloudwatch_agent" {
+  description = "Attach CloudWatchAgentServerPolicy to the monitoring EC2 IAM role."
+  type        = bool
+  default     = false
+}
+
 variable "tags" {
   description = "Tags applied to monitoring resources."
   type        = map(string)

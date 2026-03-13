@@ -1,0 +1,48 @@
+---
+- name: Check if CloudWatch Agent is already installed
+  ansible.builtin.stat:
+    path: /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl
+  register: cw_agent_binary
+
+- name: Download CloudWatch Agent .deb package
+  ansible.builtin.get_url:
+    url: "{{ cloudwatch_agent_deb_url }}"
+    dest: /tmp/amazon-cloudwatch-agent.deb
+    mode: "0644"
+  when: not cw_agent_binary.stat.exists
+
+- name: Install CloudWatch Agent
+  ansible.builtin.apt:
+    deb: /tmp/amazon-cloudwatch-agent.deb
+    state: present
+  when: not cw_agent_binary.stat.exists
+
+- name: Clean up .deb package
+  ansible.builtin.file:
+    path: /tmp/amazon-cloudwatch-agent.deb
+    state: absent
+
+- name: Fetch CloudWatch Agent config from SSM Parameter Store
+  ansible.builtin.command:
+    cmd: >-
+      /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl
+      -a fetch-config
+      -m ec2
+      -s
+      -c ssm:{{ cloudwatch_agent_ssm_config }}
+  register: cw_agent_fetch
+  changed_when: "'Start CWAgent' in cw_agent_fetch.stdout or 'Restarting' in cw_agent_fetch.stdout"
+  notify: restart cloudwatch agent
+
+- name: Enable CloudWatch Agent service
+  ansible.builtin.systemd:
+    name: amazon-cloudwatch-agent
+    enabled: true
+    state: started
+
+- name: Verify CloudWatch Agent is running
+  ansible.builtin.command:
+    cmd: /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a status
+  register: cw_agent_status
+  changed_when: false
+  failed_when: "'running' not in cw_agent_status.stdout"
