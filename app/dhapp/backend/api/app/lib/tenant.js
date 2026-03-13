@@ -572,7 +572,11 @@ async function ensureTenantReady(tenantId) {
     try {
       tenant = getTenant(id);
     } catch {
-      tenant = normalizeTenantEntry({ id, displayName: id }, id);
+      tenant = normalizeTenantEntry({
+        id,
+        displayName: id,
+        schemaName: process.env.TENANT_SCHEMA_NAME || id,
+      }, id);
     }
     const paths = ensureTenantPaths(id);
     await ensureTenantDatabase(tenant);
