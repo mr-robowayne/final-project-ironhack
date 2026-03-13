@@ -184,6 +184,7 @@ function loadConfig() {
         [DEFAULT_TENANT_ID]: {
           id: DEFAULT_TENANT_ID,
           displayName: DEFAULT_TENANT_ID,
+          schemaName: process.env.TENANT_SCHEMA_NAME || DEFAULT_TENANT_ID,
           db: {
             user: process.env.PGUSER || 'eladmin',
             host: process.env.PGHOST || 'localhost',

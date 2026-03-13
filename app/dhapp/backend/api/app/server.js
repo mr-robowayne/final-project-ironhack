@@ -986,7 +986,7 @@ function requireRole(...allowed) {
 
 function permissionCacheKey(req, normalizedRole) {
   const tenantId = String(req?.tenant?.id || 'default');
-  const schemaName = String(req?.tenant?.schemaName || `tenant_${tenantId}`);
+  const schemaName = String(req?.tenant?.schemaName || tenantId);
   return `${tenantId}:${schemaName}:${normalizedRole}`;
 }
 
@@ -1095,7 +1095,7 @@ function mapTenantRoleToLegacyRole(roleName) {
 async function resolveIdentifierEmail(tenantCtx, identifier) {
   const normalized = String(identifier || '').trim().toLowerCase();
   if (!normalized) return null;
-  const schema = quoteSchemaIdent(tenantCtx?.schemaName || `tenant_${tenantCtx?.id}`, tenantCtx?.id);
+  const schema = quoteSchemaIdent(tenantCtx?.schemaName || tenantCtx?.id, tenantCtx?.id);
   const { rows } = await tenantCtx.db.query(
     `SELECT email
        FROM ${schema}.users
@@ -1110,7 +1110,7 @@ async function resolveIdentifierEmail(tenantCtx, identifier) {
 async function findTenantAuthUserByEmail(tenantCtx, email) {
   const normalizedEmail = String(email || '').trim().toLowerCase();
   if (!normalizedEmail) return null;
-  const schema = quoteSchemaIdent(tenantCtx?.schemaName || `tenant_${tenantCtx?.id}`, tenantCtx?.id);
+  const schema = quoteSchemaIdent(tenantCtx?.schemaName || tenantCtx?.id, tenantCtx?.id);
   const { rows } = await tenantCtx.db.query(
     `SELECT u.user_id,
             /* V2: legacy_user_id removed */
@@ -1143,7 +1143,7 @@ async function findTenantAuthUserByIdentifier(tenantCtx, identifier) {
 async function findTenantAuthUserByLegacyId(tenantCtx, legacyUserId) {
   const id = Number(legacyUserId);
   if (!Number.isFinite(id) || id <= 0) return null;
-  const schema = quoteSchemaIdent(tenantCtx?.schemaName || `tenant_${tenantCtx?.id}`, tenantCtx?.id);
+  const schema = quoteSchemaIdent(tenantCtx?.schemaName || tenantCtx?.id, tenantCtx?.id);
   const { rows } = await tenantCtx.db.query(
     `SELECT u.user_id,
             /* V2: legacy_user_id removed */
@@ -1165,7 +1165,7 @@ async function findTenantAuthUserByLegacyId(tenantCtx, legacyUserId) {
 
 async function findTenantAuthUserById(tenantCtx, userId) {
   if (!userId) return null;
-  const schema = quoteSchemaIdent(tenantCtx?.schemaName || `tenant_${tenantCtx?.id}`, tenantCtx?.id);
+  const schema = quoteSchemaIdent(tenantCtx?.schemaName || tenantCtx?.id, tenantCtx?.id);
   const { rows } = await tenantCtx.db.query(
     `SELECT u.user_id, u.email, u.password_hash, u.display_name, u.is_active, u.deleted_at, r.name AS role_name
        FROM ${schema}.users u
@@ -1180,7 +1180,7 @@ async function findTenantAuthUserById(tenantCtx, userId) {
 async function buildAppUserFromTenantAuth(tenantCtx, tenantAuthUser) {
   if (!tenantAuthUser) return null;
   const legacyRole = mapTenantRoleToLegacyRole(tenantAuthUser.role_name);
-  const schema = quoteSchemaIdent(tenantCtx?.schemaName || `tenant_${tenantCtx?.id}`, tenantCtx?.id);
+  const schema = quoteSchemaIdent(tenantCtx?.schemaName || tenantCtx?.id, tenantCtx?.id);
   const { rows } = await tenantCtx.db.query(
     `SELECT u.user_id, u.email, u.display_name, u.first_name, u.last_name, u.initials, u.is_active, r.name AS role_name
        FROM ${schema}.users u
