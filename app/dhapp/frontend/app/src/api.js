@@ -77,7 +77,7 @@ export async function apiFetch(path, opts = {}) {
   const isProdBuild = process.env.NODE_ENV === 'production';
   // Dev fallback only: ensure tenant header in local dev to unblock local testing.
   if (!isProdBuild && !headers['X-Tenant-ID']) {
-    const devTenant = process.env.REACT_APP_DEV_TENANT_ID || 'test';
+    const devTenant = process.env.REACT_APP_DEV_TENANT_ID || 'dhpatientsync';
     headers['X-Tenant-ID'] = devTenant;
   }
   if (currentUserId != null && !headers['X-User-ID']) headers['X-User-ID'] = String(currentUserId);

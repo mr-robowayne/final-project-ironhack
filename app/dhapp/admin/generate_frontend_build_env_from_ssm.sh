@@ -20,7 +20,7 @@ PARAM_KEYS=(
 
 default_value() {
   case "$1" in
-    REACT_APP_DEFAULT_TENANT) echo "test" ;;
+    REACT_APP_DEFAULT_TENANT) echo "dhpatientsync" ;;
     REACT_APP_CHAT_NOTIFICATION_PREVIEW) echo "false" ;;
     *) echo "" ;;
   esac

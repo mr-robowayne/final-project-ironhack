@@ -53,7 +53,7 @@ import api, {
 
 // Optional weiterreichen (einige Unter-Components erwarten das)
 const API_BASE = process.env.REACT_APP_API_BASE || `${window.location.protocol}//${window.location.host}`;
-const DEFAULT_TENANT = process.env.REACT_APP_DEFAULT_TENANT || 'test';
+const DEFAULT_TENANT = process.env.REACT_APP_DEFAULT_TENANT || 'dhpatientsync';
 
 const parseGuardianAddress = (value) => {
   if (!value) return {};
