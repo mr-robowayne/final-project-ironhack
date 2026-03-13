@@ -6,6 +6,16 @@ const jwt = require('jsonwebtoken');
 const DEFAULT_JWT_EXPIRES_HOURS = 24;
 const DEFAULT_JWT_EXPIRES_HOURS_MAX = 24;
 
+const SCHEMA_IDENT_RE = /^[a-z_][a-z0-9_]*$/;
+
+function quoteSchema(tenantCtx) {
+  const raw = String(tenantCtx?.schemaName || tenantCtx?.id || '').trim().toLowerCase();
+  if (!SCHEMA_IDENT_RE.test(raw)) {
+    throw new Error(`Ungültiger Tenant-Schema-Name: ${raw}`);
+  }
+  return `"${raw}"`;
+}
+
 function resolveJwtExpiresHours() {
   const configured = Number(process.env.JWT_EXPIRES_HOURS || DEFAULT_JWT_EXPIRES_HOURS);
   if (!Number.isFinite(configured) || configured <= 0) return DEFAULT_JWT_EXPIRES_HOURS;
@@ -47,8 +57,10 @@ async function createSessionToken({ tenantCtx, user, jwtSecret, req, expiresHour
   const expiresAt = new Date(Date.now() + ttlHours * 60 * 60 * 1000);
   const { ip, userAgent } = resolveClientMeta(req);
 
+  const schema = quoteSchema(tenantCtx);
+
   await tenantCtx.db.query(
-    `INSERT INTO user_sessions (
+    `INSERT INTO ${schema}.user_sessions (
        session_id,
        user_id,
        expires_at,
@@ -78,12 +90,14 @@ async function validateSessionToken({ tenantCtx, payload, token }) {
   if (!payload?.sid) return { ok: false, reason: 'SESSION_ID_MISSING' };
   const sessionId = String(payload.sid);
 
+  const schema = quoteSchema(tenantCtx);
+
   const { rows } = await tenantCtx.db.query(
     `SELECT session_id,
             user_id,
             expires_at,
             invalidated_at
-       FROM user_sessions
+       FROM ${schema}.user_sessions
       WHERE session_id = $1
         AND user_id = $2
       LIMIT 1`,
@@ -100,8 +114,10 @@ async function validateSessionToken({ tenantCtx, payload, token }) {
 
 async function revokeSessionById({ tenantCtx, sessionId }) {
   if (!tenantCtx?.db || !sessionId) return;
+  const schema = quoteSchema(tenantCtx);
+
   await tenantCtx.db.query(
-    `UPDATE user_sessions
+    `UPDATE ${schema}.user_sessions
         SET invalidated_at = COALESCE(invalidated_at, now())
       WHERE session_id = $1`,
     [String(sessionId)]

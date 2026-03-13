@@ -1412,20 +1412,29 @@ app.post('/api/login', loginLimiter, async (req, res) => {
 });
 
 app.post('/api/logout', authenticateToken, async (req, res) => {
-  const isHttps = SESSION_COOKIE_SECURE || req.secure || req.headers['x-forwarded-proto'] === 'https';
-  const clearOptions = { httpOnly: true, secure: Boolean(isHttps), sameSite: SESSION_COOKIE_SAMESITE, signed: true };
-  if (SESSION_COOKIE_DOMAIN) clearOptions.domain = SESSION_COOKIE_DOMAIN;
-  res.clearCookie(SESSION_COOKIE_NAME, clearOptions);
   try {
-    const payload = req.authTokenPayload || null;
-    if (payload?.sid && req.tenant) {
-      await revokeSessionById({ tenantCtx: req.tenant, sessionId: payload.sid });
+    const isHttps = SESSION_COOKIE_SECURE || req.secure || req.headers['x-forwarded-proto'] === 'https';
+    const clearOptions = { httpOnly: true, secure: Boolean(isHttps), sameSite: SESSION_COOKIE_SAMESITE, signed: true };
+    if (SESSION_COOKIE_DOMAIN) clearOptions.domain = SESSION_COOKIE_DOMAIN;
+    res.clearCookie(SESSION_COOKIE_NAME, clearOptions);
+    try {
+      const payload = req.authTokenPayload || null;
+      if (payload?.sid && req.tenant) {
+        await revokeSessionById({ tenantCtx: req.tenant, sessionId: payload.sid });
+      }
+    } catch (err) {
+      console.error('Session revoke failed on logout:', err?.message || err);
     }
+    try {
+      await audit(req, 'logout', { userId: req.user?.id, username: req.user?.username, ...clientMeta(req) });
+    } catch (err) {
+      console.error('Audit log failed on logout:', err?.message || err);
+    }
+    res.status(204).end();
   } catch (err) {
-    console.error('Session revoke failed on logout:', err?.message || err);
+    console.error('Logout handler error:', err?.message || err);
+    res.status(500).json({ message: 'Logout fehlgeschlagen' });
   }
-  await audit(req, 'logout', { userId: req.user?.id, username: req.user?.username, ...clientMeta(req) });
-  res.status(204).end();
 });
 
 // ====== KALENDER & TERMINE API (Tenant-aware, JWT-geschützt) ======
