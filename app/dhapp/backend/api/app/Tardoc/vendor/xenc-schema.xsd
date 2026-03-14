@@ -1,9 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
-           targetNamespace="http://www.w3.org/2001/04/xmlenc#"
-           xmlns:xenc="http://www.w3.org/2001/04/xmlenc#"
-           elementFormDefault="qualified"
-           attributeFormDefault="unqualified">
-  <xs:element name="EncryptedData" type="xs:anyType"/>
-</xs:schema>
-

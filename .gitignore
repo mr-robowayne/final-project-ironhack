@@ -28,3 +28,24 @@
 # DB local config
 db/flyway.conf
 
+# Application Code - NICHT auf GitHub laden
+app/dhapp/backend/
+app/dhapp/frontend/
+app/dhapp/frontend-s3/
+
+# Credentials & Keys
+*.pem
+*.key
+*.crt
+credentials.json
+*-serviceAccountKey.json
+**/.vault_password
+
+# Python
+__pycache__/
+*.py[cod]
+
+# Build artifacts
+dist/
+build/
+
